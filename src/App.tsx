@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Camera, Map as MapIcon, History, FileText, Bell, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
-  Navigation, Wind, Droplets, Thermometer,
+  Navigation, Wind, Droplets, Thermometer, Cloud, X,
   Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor, LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -52,11 +52,40 @@ export default function App() {
   const [mapError, setMapError] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [realTimeHistory, setRealTimeHistory] = useState<any[]>([]);
+  const [weatherData, setWeatherData] = useState<{
+    temp: number;
+    humidity: number;
+    wind: number;
+    uv: number;
+    condition: string;
+  } | null>(null);
+  const [showWeatherOverlay, setShowWeatherOverlay] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  // Update real-time history for graph (last 5 minutes)
+  useEffect(() => {
+    const updateRealTimeData = () => {
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      const filtered = history.filter(item => {
+        const timestamp = item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime();
+        return timestamp > fiveMinutesAgo;
+      }).sort((a, b) => {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+      setRealTimeHistory(filtered);
+    };
+
+    updateRealTimeData();
+    const interval = setInterval(updateRealTimeData, 10000); // Update every 10s
+    return () => clearInterval(interval);
+  }, [history]);
 
   // Google Maps Auth Failure Detection
   useEffect(() => {
@@ -78,11 +107,37 @@ export default function App() {
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => {
+          const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(newPos);
+          fetchWeatherData(newPos.lat, newPos.lng);
+        },
         (err) => toast.error("Gagal mendapatkan lokasi")
       );
     }
   }, []);
+
+  const fetchWeatherData = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`);
+      const data = await res.json();
+      if (data.current) {
+        const descriptions: Record<number, string> = {
+          0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+          45: "Fog", 48: "Rime Fog", 51: "Drizzle", 61: "Rain", 95: "Thunderstorm"
+        };
+        setWeatherData({
+          temp: data.current.temperature_2m,
+          humidity: data.current.relative_humidity_2m,
+          wind: data.current.wind_speed_10m,
+          uv: data.current.uv_index,
+          condition: descriptions[data.current.weather_code] || "Clear"
+        });
+      }
+    } catch (err) {
+      console.error("OpenMeteo fetch failed:", err);
+    }
+  };
 
   // Load History
   const loadHistory = async () => {
@@ -516,6 +571,58 @@ export default function App() {
                         <canvas ref={canvasRef} className="hidden" />
                         <div className="absolute inset-0 bg-gradient-to-t from-navy-950/90 via-transparent to-navy-950/40 pointer-events-none"></div>
                         
+                        {/* Weather Overlay Panel */}
+                        <AnimatePresence>
+                          {showWeatherOverlay && weatherData && (
+                            <motion.div 
+                              initial={{ opacity: 0, x: 20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20 }}
+                              className="absolute top-8 right-8 z-30 group"
+                            >
+                              <div className="glass-dark border-white/10 p-4 rounded-3xl shadow-2xl relative overflow-hidden backdrop-blur-2xl">
+                                <button 
+                                  onClick={() => setShowWeatherOverlay(false)}
+                                  className="absolute top-2 right-2 p-1 text-slate-500 hover:text-white transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                                
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex items-center gap-3 border-b border-white/5 pb-2">
+                                     <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                                        <Cloud className="w-4 h-4" />
+                                     </div>
+                                     <div>
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none">External Conditions</p>
+                                        <h4 className="text-sm font-black text-white mt-0.5">{weatherData.condition}</h4>
+                                     </div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Thermometer className="w-3 h-3 text-red-400" />
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">TEMP: <span className="text-white">{weatherData.temp}°C</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Droplets className="w-3 h-3 text-blue-400" />
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">HUMID: <span className="text-white">{weatherData.humidity}%</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Wind className="w-3 h-3 text-emerald-400" />
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">WIND: <span className="text-white">{weatherData.wind}km/h</span></span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <RefreshCw className="w-3 h-3 text-amber-400" />
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">UV: <span className="text-white font-black">{weatherData.uv}</span></span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
                         {/* Vision Stats Overlay */}
                         <div className="absolute top-8 left-8 z-20 flex flex-col gap-3">
                           <div className="glass px-4 py-2 rounded-full border-white/20 flex items-center gap-3">
@@ -747,6 +854,49 @@ export default function App() {
                       </div>
                     </motion.div>
 
+                    {/* Real-time Trend Graph */}
+                    <div className="glass-dark rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden h-[180px]">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Real-time Trend</span>
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Last 5 Minutes</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live</span>
+                        </div>
+                      </div>
+                      
+                      <div className="h-24 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={realTimeHistory}>
+                            <defs>
+                              <linearGradient id="colorRtAqi" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="timestamp" hide />
+                            <YAxis hide domain={['auto', 'auto']} />
+                            <Tooltip 
+                               contentStyle={{ backgroundColor: '#071226', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
+                               labelFormatter={(val) => new Date(val).toLocaleTimeString()}
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="aqi" 
+                              stroke="#3b82f6" 
+                              strokeWidth={3} 
+                              fillOpacity={1} 
+                              fill="url(#colorRtAqi)" 
+                              animationDuration={1000}
+                              isAnimationActive={true}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
                     {/* Quick Forecast Grid */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="glass-dark rounded-3xl p-5 border-white/5">
@@ -936,18 +1086,28 @@ export default function App() {
                     internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                     className="w-full h-full grayscale invert opacity-70 contrast-[1.4]"
                   >
-                    {location && (
+    {location && (
                       <AdvancedMarker position={location}>
-                         <Pin background="#3b82f6" glyphColor="#fff" borderColor="#1d4ed8" />
+                         <div className="relative flex items-center justify-center">
+                            <div className="absolute w-10 h-10 bg-blue-500/40 rounded-full animate-pulse-subtle"></div>
+                            <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(37,99,235,0.6)] z-10"></div>
+                         </div>
                       </AdvancedMarker>
                     )}
                     {history.map((log, idx) => log.location && (
                       <AdvancedMarker key={idx} position={log.location}>
-                         <Pin 
-                           background={log.aqi > 150 ? "#ef4444" : log.aqi > 100 ? "#f97316" : log.aqi > 50 ? "#eab308" : "#10b981"} 
-                           glyphColor="#fff" 
-                           scale={0.8}
-                         />
+                         <div className={cn(
+                           "flex items-center justify-center p-1.5 rounded-full border border-white/30 transition-all hover:scale-125 cursor-pointer shadow-xl",
+                           log.aqi > 150 ? "bg-rose-600 shadow-rose-900/60" : 
+                           log.aqi > 100 ? "bg-orange-600 shadow-orange-900/60" : 
+                           log.aqi > 50 ? "bg-amber-500 shadow-amber-900/60" : 
+                           "bg-emerald-600 shadow-emerald-900/60"
+                         )}>
+                           {log.aqi > 150 ? <Wind className="w-3.5 h-3.5 text-white" /> : 
+                            log.aqi > 100 ? <AlertTriangle className="w-3.5 h-3.5 text-white" /> : 
+                            log.aqi > 50 ? <Info className="w-3.5 h-3.5 text-white" /> : 
+                            <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                         </div>
                       </AdvancedMarker>
                     ))}
                   </Map>

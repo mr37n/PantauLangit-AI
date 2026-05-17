@@ -25,14 +25,29 @@ app.post("/api/analyze-frame", async (req, res) => {
     if (location && location.lat && location.lng) {
       try {
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code`
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`
         );
         const data = await weatherRes.json();
         if (data.current) {
+          // Weather code mapping (WMO codes)
+          const weatherDescriptions: Record<number, string> = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Fog", 48: "Depositing rime fog",
+            51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+            61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+            71: "Slight snow fall", 73: "Moderate snow fall", 75: "Heavy snow fall",
+            77: "Snow grains",
+            80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
+            85: "Slight snow showers", 86: "Heavy snow showers",
+            95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
+          };
+
           weatherData = {
             temperature: `${data.current.temperature_2m}°C`,
             humidity: `${data.current.relative_humidity_2m}%`,
             windSpeed: `${data.current.wind_speed_10m} km/h`,
+            uvIndex: data.current.uv_index,
+            condition: weatherDescriptions[data.current.weather_code] || "Unknown",
             conditionCode: data.current.weather_code
           };
         }
@@ -53,7 +68,7 @@ app.post("/api/analyze-frame", async (req, res) => {
       - estimatedAQI: (numerical estimate, 0-500+)
       - dominantParticulate: (e.g., "PM2.5", "PM10", "NO2")
       - confidence: (percentage)
-      - description: (brief text analysis of what you see in the frame related to air quality. Mention how weather conditions like humidity or wind might be affecting the observed air quality if applicable)
+      - description: (brief text analysis of what you see in the frame related to air quality. Mention how weather conditions like humidity, wind, or UV Index (${weatherData?.uvIndex || 'N/A'}) might be affecting the observed air quality or ground-level ozone formation if applicable)
       - status: (e.g., "Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous")
       
       Return ONLY valid JSON.
