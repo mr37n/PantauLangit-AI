@@ -9,53 +9,59 @@ export const Logo = ({ className }: { className?: string }) => {
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Cityscape Silhouette - Updated to Red */}
+      {/* Cityscape Left - Red */}
       <path 
-        d="M25 60 V50 H30 V40 H35 V30 H42 V55 H48 V45 H55 V60 H25" 
-        stroke="#EF4444" 
-        strokeWidth="1.2" 
-        strokeOpacity="0.8" 
-      />
-      <path 
-        d="M65 60 V52 H70 V58 H75 V48 H80 V60 H65" 
-        stroke="#EF4444" 
-        strokeWidth="1.2" 
-        strokeOpacity="0.8" 
+        d="M11 62.5 V54.5 H18 V50 H24 V60 L26 44 L31 32 V54.5 H35 V42.5 L39 40 V50 H43 V62.5 H11" 
+        stroke="#FF4566" 
+        strokeWidth="1.5" 
+        strokeLinejoin="round"
       />
       
-      {/* Baseline */}
-      <line x1="24" y1="60" x2="76" y2="60" stroke="#2DD4BF" strokeWidth="1" />
-      
-      {/* Arc */}
+      {/* Cityscape Right - Red */}
       <path 
-        d="M30 60 Q50 35 70 60" 
-        stroke="#2DD4BF" 
+        d="M64.5 62.5 H69 V58 H71 V38.5 H74.5 V52 L76 38.5 H81 V62.5 H77.5 V59.5 H74.5 V62.5 L81 62.5 V48 H91 V58 L94 62.5 H64.5" 
+        stroke="#FF4566" 
+        strokeWidth="1.5" 
+        strokeLinejoin="round"
+      />
+      
+      {/* Baseline - Blue */}
+      <line x1="8" y1="62.5" x2="92" y2="62.5" stroke="#67C6FF" strokeWidth="1.5" />
+      
+      {/* Main Scan Arc - Blue */}
+      <path 
+        d="M18.5 62.5 Q50 21 81.5 62.5" 
+        stroke="#67C6FF" 
         strokeWidth="2.5" 
         strokeLinecap="round"
       />
       
-      {/* Dots on Arc */}
-      <circle cx="30" cy="60" r="1.5" fill="#2DD4BF" />
-      <circle cx="70" cy="60" r="1.5" fill="#2DD4BF" />
-      <circle cx="50" cy="47.5" r="1.5" fill="#2DD4BF" />
+      {/* Arc Nodes - Blue */}
+      <circle cx="18.5" cy="62.5" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
+      <circle cx="81.5" cy="62.5" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
+      <circle cx="50" cy="38" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
       
-      {/* Center Dashed Line */}
+      {/* Center Vertical Scanner - Blue */}
       <line 
-        x1="50" y1="47.5" x2="50" y2="60" 
-        stroke="#2DD4BF" 
-        strokeWidth="1" 
-        strokeDasharray="2 2" 
+        x1="50" y1="38" x2="50" y2="62.5" 
+        stroke="#67C6FF" 
+        strokeWidth="1.5" 
+        strokeDasharray="2 3" 
       />
       
-      {/* Square Frame Braces */}
-      <path d="M15 30 V20 Q15 15 20 15 H30" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M70 15 H80 Q85 15 85 20 V30" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M85 70 V80 Q85 85 80 85 H70" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M30 85 H20 Q15 85 15 80 V70" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Outer Viewfinder Frame - Blue */}
+      <path d="M16 23 V16 A3 3 0 0 1 19 13 H24" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M76 13 H81 A3 3 0 0 1 84 16 V23" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M84 77 V84 A3 3 0 0 1 81 87 H76" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M24 87 H19 A3 3 0 0 1 16 84 V77" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
       
-      {/* Mid lines */}
-      <line x1="45" y1="15" x2="55" y2="15" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="45" y1="85" x2="55" y2="85" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Mid Connectors - Blue */}
+      <line x1="41" y1="8" x2="59" y2="8" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
+      <line x1="7" y1="41" x2="7" y2="59" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
+      <line x1="93" y1="41" x2="93" y2="59" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
+      
+      {/* Outer rounded border */}
+      <rect x="6" y="6" width="88" height="88" rx="12" stroke="#67C6FF" strokeWidth="1.5" strokeOpacity="0.5" />
     </svg>
   );
 };
