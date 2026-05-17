@@ -112,21 +112,48 @@ export default function App() {
     setIsInitializing(true);
     setRecordedVideoUrl(null);
     
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error("Browser Anda tidak mendukung akses kamera.");
+      setIsInitializing(false);
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: "environment",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        } 
-      });
+      // Try high quality first
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          } 
+        });
+      } catch (e) {
+        console.warn("High quality/Environment failed, falling back to basic video...", e);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(e => console.error("Video play error after load:", e));
+        };
         setIsCapturing(true);
       }
     } catch (err) {
-      console.error("Camera Error:", err);
-      toast.error("Gagal mengakses kamera. Pastikan izin diberikan.");
+      console.error("Camera Error Handle:", err);
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          toast.error("Izin kamera ditolak. Silakan aktifkan di pengaturan browser.");
+        } else if (err.name === 'NotFoundError') {
+          toast.error("Tidak ada kamera yang ditemukan.");
+        } else {
+          toast.error(`Gagal mengakses kamera: ${err.message}`);
+        }
+      } else {
+        toast.error("Gagal mengakses kamera. Pastikan izin diberikan.");
+      }
     } finally {
       setIsInitializing(false);
     }
