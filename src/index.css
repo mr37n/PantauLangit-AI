@@ -23,15 +23,22 @@
 
 @layer components {
   .glass {
-    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl;
+    background-color: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }
   
   .glass-dark {
-    @apply bg-slate-950/40 backdrop-blur-xl border border-white/5 shadow-2xl;
+    background-color: rgba(2, 8, 23, 0.4);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }
 
   .neon-border {
-    @apply border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)];
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
   }
 }
 

@@ -3,7 +3,7 @@ import {
   Camera, Map as MapIcon, History, FileText, Bell, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
   Navigation, Wind, Droplets, Thermometer,
-  Download, RefreshCw, BarChart3
+  Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
@@ -12,7 +12,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from "recharts";
 import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
 import { auth, saveAQIRecord, getHistory } from "./lib/firebase";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
@@ -40,7 +40,8 @@ const MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
 const hasValidMapsKey = Boolean(MAPS_API_KEY) && MAPS_API_KEY !== "MY_GOOGLE_MAPS_KEY";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"analysis" | "history" | "map">("analysis");
+  const [activeTab, setActiveTab] = useState<"analysis" | "history" | "map" | "settings">("analysis");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -184,14 +185,20 @@ export default function App() {
   const exportPDF = async () => {
     const element = document.getElementById("report-area");
     if (!element) return;
-    const canvas = await html2canvas(element);
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Cakrawala_AQI_Report_${new Date().getTime()}.pdf`);
+    try {
+      const dataUrl = await toPng(element, { quality: 0.95, cacheBust: true });
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => (img.onload = resolve));
+      const pdfHeight = (img.height * pdfWidth) / img.width;
+      pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Cakrawala_AI_Report_${new Date().getTime()}.pdf`);
+    } catch (err) {
+      console.error("PDF Export Error:", err);
+      toast.error("Gagal mengekspor PDF. Silakan coba lagi.");
+    }
   };
 
   if ((!hasValidMapsKey || mapError) && activeTab === "map") {
@@ -263,17 +270,23 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-navy-950 font-sans text-slate-200 overflow-hidden selection:bg-blue-500/30">
+    <div className={cn(
+      "flex flex-col md:flex-row h-screen w-full font-sans overflow-hidden selection:bg-blue-500/30 transition-colors duration-500",
+      theme === 'dark' ? "bg-navy-950 text-slate-200" : "bg-slate-50 text-slate-900"
+    )}>
       <Toaster />
       
       {/* Sidebar (Desktop) */}
-      <aside className="w-72 bg-navy-900 border-r border-white/5 flex flex-col hidden md:flex relative z-50">
+      <aside className={cn(
+        "w-72 border-r flex flex-col hidden md:flex relative z-50 transition-colors duration-500",
+        theme === 'dark' ? "bg-navy-900 border-white/5" : "bg-white border-slate-200"
+      )}>
         <div className="p-8">
           <div className="flex items-center gap-4">
-            <Logo className="w-12 h-12 text-white" />
+            <Logo className={cn("w-12 h-12", theme === 'dark' ? "text-white" : "text-blue-600")} />
             <div className="flex flex-col">
-              <h1 className="text-xl font-black tracking-tight text-white leading-none">Cakrawala</h1>
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mt-1">Intelligence</span>
+              <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>Cakrawala AI</h1>
+              <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider mt-1">Measuring Air Quality Through the Horizon</span>
             </div>
           </div>
         </div>
@@ -282,7 +295,8 @@ export default function App() {
           {[
             { id: "analysis", icon: Camera, label: "Scan Reality" },
             { id: "history", icon: History, label: "Evolution Data" },
-            { id: "map", icon: MapIcon, label: "Global Presence" }
+            { id: "map", icon: MapIcon, label: "Global Presence" },
+            { id: "settings", icon: Settings, label: "Control Hub" },
           ].map(item => (
             <button
               key={item.id}
@@ -290,23 +304,25 @@ export default function App() {
               className={cn(
                 "w-full px-6 py-5 rounded-2xl flex items-center gap-5 transition-all duration-300 group relative overflow-hidden border",
                 activeTab === item.id 
-                  ? "bg-blue-600/10 text-blue-400 border-blue-500/20 shadow-lg shadow-blue-500/5" 
-                  : "border-transparent text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                  ? "bg-blue-600/10 text-blue-500 border-blue-500/20 shadow-lg shadow-blue-500/5 font-black" 
+                  : theme === 'dark' 
+                    ? "border-transparent text-slate-500 hover:bg-white/5 hover:text-slate-300"
+                    : "border-transparent text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               )}
             >
               {activeTab === item.id && (
                 <motion.div layoutId="activeNav" className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-blue-500 rounded-r-full" />
               )}
-              <item.icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", activeTab === item.id && "text-blue-400")} />
+              <item.icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", activeTab === item.id ? "text-blue-500" : "text-slate-400")} />
               <span className="font-bold text-[13px] tracking-widest uppercase">{item.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="p-6 mt-auto border-t border-white/5">
+        <div className={cn("p-6 mt-auto border-t", theme === 'dark' ? "border-white/5" : "border-slate-100")}>
           <div className="flex flex-col gap-2">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Public Neural Node</p>
-            <p className="text-[10px] text-slate-600 text-center uppercase tracking-tighter">Access Mode: Free & Collective</p>
+            <p className={cn("text-[10px] font-black uppercase tracking-widest text-center", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Public Neural Node</p>
+            <p className={cn("text-[10px] text-center uppercase tracking-tighter", theme === 'dark' ? "text-slate-600" : "text-slate-300")}>Access Mode: Free & Collective</p>
           </div>
         </div>
       </aside>
@@ -314,34 +330,30 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative overflow-hidden h-full">
         {/* Futuristic Background Grain/Glow */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className={cn("absolute inset-0 z-0 transition-colors duration-500", theme === 'dark' ? "bg-navy-950" : "bg-slate-50")}></div>
+        <div className={cn("absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[120px] pointer-events-none", theme === 'dark' ? "bg-blue-500/5" : "bg-blue-500/10")}></div>
         
         {/* Header */}
-        <header className="h-24 border-b border-white/5 bg-navy-950/95 flex items-center justify-between px-6 md:px-10 sticky top-0 z-40 backdrop-blur-2xl">
+        <header className={cn(
+          "h-24 border-b flex items-center justify-between px-6 md:px-10 sticky top-0 z-40 backdrop-blur-2xl transition-colors duration-500",
+          theme === 'dark' ? "bg-navy-950/95 border-white/5" : "bg-white/80 border-slate-200"
+        )}>
           <div className="flex items-center gap-4 md:gap-8">
-             <Logo className="w-10 h-10 md:hidden" />
+             <Logo className={cn("w-10 h-10 md:hidden", theme === 'dark' ? "text-white" : "text-blue-600")} />
              <div className="flex flex-col">
                 <div className="flex items-center gap-3">
                   <span className={cn("w-2.5 h-2.5 rounded-full", location ? "bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.7)]" : "bg-red-500")}></span>
-                  <p className="text-sm font-black text-white tracking-[0.2em] uppercase">
-                    {activeTab === "analysis" ? "Atmosphere Scan" : activeTab === "history" ? "Data Evolution" : "Global Reach"}
+                  <p className={cn("text-sm font-black tracking-[0.2em] uppercase transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                    {activeTab === "analysis" ? "Atmosphere Scan" : activeTab === "history" ? "Data Evolution" : activeTab === "map" ? "Global Reach" : "System Control"}
                   </p>
                 </div>
-                <span className="text-[10px] font-bold text-slate-500 tracking-wider mt-1.5 ml-5">
+                <span className={cn("text-[10px] font-bold tracking-wider mt-1.5 ml-5", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>
                   SYSTEM READY • {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "AQUIRING GPS..."}
                 </span>
              </div>
           </div>
           
           <div className="flex items-center gap-4">
-             <button 
-                onClick={exportPDF}
-                className="glass hover:bg-white/10 p-3 rounded-2xl transition-all border-white/10 group active:scale-95"
-                title="Export PDF Report"
-              >
-                <Download className="w-5 h-5 text-blue-400 group-hover:text-blue-300" />
-              </button>
-              <div className="w-px h-6 bg-white/10 mx-2 hidden sm:block"></div>
               <div className="hidden sm:flex items-center gap-3">
                  <div className="w-9 h-9 rounded-2xl glass flex items-center justify-center border-emerald-500/20">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -680,30 +692,30 @@ export default function App() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-10 p-4 md:p-10"
+                className="space-y-6 md:space-y-10 p-3 md:p-10"
               >
-                <div id="report-area" className="glass border border-white/5 p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative overflow-hidden">
+                <div id="report-area" className="glass border border-white/5 p-4 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full"></div>
                   
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12 relative z-10">
-                    <div>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8 mb-8 md:mb-12 relative z-10">
+                    <div className="w-full md:w-auto">
                       <div className="flex items-center gap-3 mb-2">
                         <BarChart3 className="w-5 h-5 text-blue-400" />
                         <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em]">Historical Log</h3>
                       </div>
-                      <h2 className="text-4xl font-black text-white tracking-tighter">Evolution Metrics</h2>
-                      <p className="text-slate-500 text-sm mt-3 max-w-md font-medium leading-relaxed">Analisis mendalam mengenai fluktuasi kualitas udara di sektor Anda berdasarkan rekaman sensor fusion.</p>
+                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter">Evolution Metrics</h2>
+                      <p className="text-slate-500 text-xs md:text-sm mt-3 max-w-md font-medium leading-relaxed">Analisis mendalam mengenai fluktuasi kualitas udara di sektor Anda berdasarkan rekaman sensor fusion.</p>
                     </div>
-                    <div className="flex items-center gap-4 bg-navy-900/50 p-1.5 rounded-[2rem] border border-white/5">
-                      <div className="px-8 py-3 glass rounded-2xl text-center border-white/10">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Mean AQI</p>
-                        <p className="text-2xl font-black text-blue-400">
+                    <div className="flex items-center gap-2 md:gap-4 bg-navy-900/50 p-1.5 md:p-2 rounded-[2rem] border border-white/5 w-full md:w-auto overflow-x-auto">
+                      <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 glass rounded-[1.5rem] text-center border-white/10 min-w-[100px] md:min-w-[120px]">
+                        <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Mean AQI</p>
+                        <p className="text-xl md:text-2xl font-black text-blue-400">
                           {history.length > 0 ? (history.reduce((a, b) => a + b.aqi, 0) / history.length).toFixed(0) : "--"}
                         </p>
                       </div>
-                      <div className="px-8 py-3 text-center">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Data Nodes</p>
-                        <p className="text-2xl font-black text-white">{history.length}</p>
+                      <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 text-center min-w-[100px] md:min-w-[120px]">
+                        <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Data Nodes</p>
+                        <p className="text-xl md:text-2xl font-black text-white">{history.length}</p>
                       </div>
                     </div>
                   </div>
@@ -748,33 +760,33 @@ export default function App() {
                   </div>
 
                   {/* Logs Table */}
-                  <div className="overflow-hidden glass-dark rounded-3xl border border-white/5">
-                    <table className="w-full text-left text-sm">
+                  <div className="overflow-x-auto glass-dark rounded-3xl border border-white/5">
+                    <table className="w-full text-left text-sm min-w-[800px] md:min-w-full">
                       <thead>
                         <tr className="bg-white/5 text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">
-                          <th className="px-8 py-5">Temporal Stamp</th>
-                          <th className="px-8 py-5">Sector Address</th>
-                          <th className="px-8 py-5 text-center">Indeks</th>
-                          <th className="px-8 py-5">Registry State</th>
-                          <th className="px-8 py-5">Atmospheric Index</th>
+                          <th className="px-4 md:px-8 py-5">Temporal Stamp</th>
+                          <th className="px-4 md:px-8 py-5">Sector Address</th>
+                          <th className="px-4 md:px-8 py-5 text-center">Indeks</th>
+                          <th className="px-4 md:px-8 py-5">Registry State</th>
+                          <th className="px-4 md:px-8 py-5">Atmospheric Index</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {history.length > 0 ? history.map((log) => (
                           <tr key={log.id} className="hover:bg-white/[0.02] transition-colors group">
-                            <td className="px-8 py-6 font-bold text-slate-400 group-hover:text-white transition-colors">
+                            <td className="px-4 md:px-8 py-6 font-bold text-slate-400 group-hover:text-white transition-colors">
                               {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'N/A'}
                             </td>
-                            <td className="px-8 py-6 text-slate-500 font-medium">{log.address || "Jakarta Pusat"}</td>
-                            <td className="px-8 py-6 text-center">
+                            <td className="px-4 md:px-8 py-6 text-slate-500 font-medium">{log.address || "Jakarta Pusat"}</td>
+                            <td className="px-4 md:px-8 py-6 text-center">
                               <span className={cn("text-lg font-black", getAQITextColor(log.aqi))}>{log.aqi}</span>
                             </td>
-                            <td className="px-8 py-6">
+                            <td className="px-4 md:px-8 py-6">
                               <span className="text-[10px] font-black bg-navy-950 px-3 py-1.5 rounded-full text-slate-400 border border-white/5 uppercase tracking-widest">
                                 {log.status}
                               </span>
                             </td>
-                            <td className="px-8 py-6 font-mono text-slate-500 font-black">{(log.visibilityIndex * 100).toFixed(0)}% CLEAR</td>
+                            <td className="px-4 md:px-8 py-6 font-mono text-slate-500 font-black">{(log.visibilityIndex * 100).toFixed(0)}% CLEAR</td>
                           </tr>
                         )) : (
                           <tr>
@@ -856,23 +868,177 @@ export default function App() {
                 </div>
               </motion.div>
             )}
+
+            {activeTab === "settings" && (
+              <motion.div 
+                key="settings"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="max-w-4xl mx-auto space-y-10 p-6 md:p-10 relative z-10"
+              >
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div>
+                    <h2 className={cn("text-4xl font-black tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>System Configuration</h2>
+                    <p className={cn("text-sm mt-2 font-medium transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Atur preferensi visual dan manajemen data sistem Cakrawala AI.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Theme Settings */}
+                  <div className={cn(
+                    "glass border p-8 rounded-[2.5rem] relative overflow-hidden group transition-all duration-500",
+                    theme === 'dark' ? "border-white/5" : "bg-white/40 border-slate-200"
+                  )}>
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[60px] rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center border transition-colors",
+                        theme === 'dark' ? "bg-blue-500/10 border-blue-500/20" : "bg-blue-50 border-blue-100"
+                      )}>
+                        {theme === 'dark' ? <Moon className="w-6 h-6 text-blue-400" /> : <Sun className="w-6 h-6 text-blue-600" />}
+                      </div>
+                      <h3 className={cn("text-xl font-black tracking-tight transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>Visual Interface</h3>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border transition-colors",
+                        theme === 'dark' ? "bg-white/[0.02] border-white/5" : "bg-slate-50 border-slate-100"
+                      )}>
+                        <div className="flex flex-col">
+                          <span className={cn("text-sm font-bold transition-colors", theme === 'dark' ? "text-slate-300" : "text-slate-700")}>Tema Aplikasi</span>
+                          <span className={cn("text-[10px] uppercase tracking-widest font-black transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Current: {theme === 'dark' ? 'Neural Dark' : 'Spectral Light'}</span>
+                        </div>
+                        <button 
+                          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                          className={cn(
+                            "relative w-14 h-8 rounded-full border p-1 transition-all cursor-pointer",
+                            theme === 'dark' ? "bg-navy-950 border-white/10" : "bg-slate-200 border-slate-300"
+                          )}
+                        >
+                          <motion.div 
+                            animate={{ x: theme === 'dark' ? 24 : 0 }}
+                            className="w-6 h-6 rounded-full bg-blue-500 shadow-lg shadow-blue-500/30 flex items-center justify-center"
+                          >
+                            {theme === 'dark' ? <Moon className="w-3 h-3 text-white" /> : <Sun className="w-3 h-3 text-white" />}
+                          </motion.div>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <button 
+                          onClick={() => setTheme('dark')}
+                          className={cn(
+                            "flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all",
+                            theme === 'dark' ? "bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20" : "bg-white/5 hover:bg-white/10 border-slate-100"
+                          )}
+                        >
+                          <Moon className={cn("w-6 h-6 transition-colors", theme === 'dark' ? "text-blue-400" : "text-slate-400")} />
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-blue-400" : "text-slate-500")}>Dark Mode</span>
+                        </button>
+                        <button 
+                          onClick={() => setTheme('light')}
+                          className={cn(
+                            "flex flex-col items-center gap-3 p-6 rounded-3xl border transition-all",
+                            theme === 'light' ? "bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20" : "bg-white/5 hover:bg-slate-50 border-slate-100"
+                          )}
+                        >
+                          <Sun className={cn("w-6 h-6 transition-colors", theme === 'light' ? "text-blue-600" : "text-slate-400")} />
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'light' ? "text-blue-600" : "text-slate-500")}>Light Mode</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Export Center */}
+                  <div className={cn(
+                    "glass border p-8 rounded-[2.5rem] relative overflow-hidden group transition-all duration-500",
+                    theme === 'dark' ? "border-white/5" : "bg-white/40 border-slate-200"
+                  )}>
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-[60px] rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center border transition-colors",
+                        theme === 'dark' ? "bg-purple-500/10 border-purple-500/20" : "bg-purple-50 border-purple-100"
+                      )}>
+                        <FileText className={cn("w-6 h-6", theme === 'dark' ? "text-purple-400" : "text-purple-600")} />
+                      </div>
+                      <h3 className={cn("text-xl font-black tracking-tight transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>Reporting Center</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className={cn(
+                        "p-6 rounded-3xl border transition-colors",
+                        theme === 'dark' ? "bg-white/[0.02] border-white/5" : "bg-slate-50 border-slate-100"
+                      )}>
+                        <h4 className={cn("text-sm font-bold mb-2 transition-colors", theme === 'dark' ? "text-slate-300" : "text-slate-700")}>Evolution Full Report</h4>
+                        <p className={cn("text-xs mb-6 leading-relaxed transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Ekspor seluruh data riwayat kualitas udara ke dalam format dokumen PDF profesional.</p>
+                        
+                        <button 
+                          onClick={exportPDF}
+                          disabled={history.length === 0}
+                          className="w-full flex items-center justify-center gap-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:grayscale py-4 rounded-2xl font-black text-xs transition-all text-white shadow-xl shadow-purple-900/40"
+                        >
+                          <Download className="w-4 h-4" />
+                          GENERATE FULL PDF REPORT
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between px-2">
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Total Logs Ready: {history.length}</span>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Export Limit: A4 Format</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  "glass border p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500",
+                  theme === 'dark' ? "border-white/5" : "bg-white border-slate-200"
+                )}>
+                  <div className="flex items-center gap-6">
+                    <div className={cn(
+                      "w-16 h-16 rounded-[2rem] flex items-center justify-center border shrink-0 transition-colors",
+                      theme === 'dark' ? "bg-navy-900 border-white/10" : "bg-slate-50 border-slate-200"
+                    )}>
+                      <Logo className={cn("w-10 h-10", theme === 'dark' ? "text-white" : "text-blue-600")} />
+                    </div>
+                    <div>
+                      <h4 className={cn("text-lg font-black transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>System Status: Collective Node</h4>
+                      <p className={cn("text-xs mt-1 transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Aplikasi berjalan pada mode publik. Data disinkronkan secara real-time dengan neural network global.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black border border-emerald-500/20 uppercase tracking-widest">Global Sync Active</span>
+                    <span className="px-4 py-2 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-black border border-blue-500/20 uppercase tracking-widest">Free Public Access</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
       </main>
 
       {/* Mobile Bottom Navigation - Sticky */}
-      <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-white/10 md:hidden z-50 px-6 flex items-center justify-between pb-4">
+      <div className={cn(
+        "fixed bottom-0 left-0 right-0 h-24 glass border-t md:hidden z-50 px-6 flex items-center justify-between pb-4 transition-colors duration-500",
+        theme === 'dark' ? "border-white/10" : "bg-white/80 border-slate-200"
+      )}>
         {[
           { id: "analysis", icon: Camera, label: "Scan" },
           { id: "history", icon: History, label: "Data" },
-          { id: "map", icon: MapIcon, label: "Global" }
+          { id: "map", icon: MapIcon, label: "Global" },
+          { id: "settings", icon: Settings, label: "System" }
         ].map(item => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id as any)}
             className={cn(
               "flex flex-col items-center gap-1.5 px-6 py-2 rounded-2xl transition-all",
-              activeTab === item.id ? "text-blue-400 bg-blue-500/10" : "text-slate-500"
+              activeTab === item.id 
+                ? "text-blue-500 bg-blue-500/10" 
+                : theme === 'dark' ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
             )}
           >
             <item.icon className="w-5 h-5" />
