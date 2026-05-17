@@ -27,20 +27,17 @@ service cloud.firestore {
 
     // Air Quality History Collection
     function isValidRecord(data) {
-      return data.userId == request.auth.uid
-        && data.aqi is number
+      return data.aqi is number
         && data.timestamp == request.time
         && data.status is string
         && data.status.size() <= 64;
     }
 
     match /air_quality_history/{recordId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() 
-        && isValidRecord(incoming())
+      allow list, get: if true;
+      allow create: if isValidRecord(incoming())
         && isValidId(recordId);
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if false; // Prevention of public deletions
     }
   }
 }

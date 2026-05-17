@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Camera, Map as MapIcon, History, FileText, Bell, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
-  Navigation, Wind, Droplets, Thermometer, User as UserIcon,
-  LogOut, LogIn, Download, RefreshCw, BarChart3
+  Navigation, Wind, Droplets, Thermometer,
+  Download, RefreshCw, BarChart3
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
@@ -13,8 +13,8 @@ import {
 } from "recharts";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { auth, signInWithGoogle, saveAQIRecord, getHistory } from "./lib/firebase";
+import { Logo } from "./components/Logo";
+import { auth, saveAQIRecord, getHistory } from "./lib/firebase";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
 
 // Types
@@ -40,7 +40,6 @@ const MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
 const hasValidMapsKey = Boolean(MAPS_API_KEY) && MAPS_API_KEY !== "MY_GOOGLE_MAPS_KEY";
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<"analysis" | "history" | "map">("analysis");
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -67,10 +66,7 @@ export default function App() {
 
   // Auth State
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) loadHistory();
-    });
+    loadHistory();
   }, []);
 
   // Location Watcher
@@ -166,7 +162,7 @@ export default function App() {
       const data = await res.json();
       setAnalysis(data);
 
-      if (user && data.estimatedAQI) {
+      if (data.estimatedAQI) {
         await saveAQIRecord({
           aqi: data.estimatedAQI,
           status: data.status,
@@ -274,7 +270,7 @@ export default function App() {
       <aside className="w-72 bg-navy-900 border-r border-white/5 flex flex-col hidden md:flex relative z-50">
         <div className="p-8">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-black text-xl">C</div>
+            <Logo className="w-12 h-12 text-white" />
             <div className="flex flex-col">
               <h1 className="text-xl font-black tracking-tight text-white leading-none">Cakrawala</h1>
               <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mt-1">Intelligence</span>
@@ -307,34 +303,11 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="p-6 mt-auto">
-          {user ? (
-            <div className="glass-dark p-4 rounded-3xl border border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3 truncate">
-                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
-                  <UserIcon className="w-4 h-4 text-blue-400" />
-                </div>
-                <div className="flex flex-col truncate">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Identified As</span>
-                  <span className="text-xs font-bold text-slate-200 truncate">{user.email?.split('@')[0]}</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => auth.signOut()} 
-                className="w-8 h-8 rounded-xl hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all flex items-center justify-center"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={signInWithGoogle}
-              className="w-full h-14 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 p-3 rounded-2xl font-black text-sm transition-all text-white shadow-xl shadow-blue-900/40"
-            >
-              <LogIn className="w-5 h-5" />
-              Login Google
-            </button>
-          )}
+        <div className="p-6 mt-auto border-t border-white/5">
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Public Neural Node</p>
+            <p className="text-[10px] text-slate-600 text-center uppercase tracking-tighter">Access Mode: Free & Collective</p>
+          </div>
         </div>
       </aside>
 
@@ -345,7 +318,8 @@ export default function App() {
         
         {/* Header */}
         <header className="h-24 border-b border-white/5 bg-navy-950/95 flex items-center justify-between px-6 md:px-10 sticky top-0 z-40 backdrop-blur-2xl">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-4 md:gap-8">
+             <Logo className="w-10 h-10 md:hidden" />
              <div className="flex flex-col">
                 <div className="flex items-center gap-3">
                   <span className={cn("w-2.5 h-2.5 rounded-full", location ? "bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.7)]" : "bg-red-500")}></span>
@@ -412,7 +386,7 @@ export default function App() {
                                 "w-28 h-28 rounded-[2.5rem] glass flex items-center justify-center relative z-10 border-white/10 transition-all duration-700 shadow-[0_0_50px_rgba(59,130,246,0.15)]",
                                 isInitializing ? "scale-110 rotate-180 opacity-50" : "group-hover:rotate-12"
                               )}>
-                                <Camera className={cn("w-12 h-12 text-blue-400", isInitializing && "animate-pulse")} />
+                                <Logo className={cn("w-16 h-16", isInitializing && "animate-pulse")} />
                               </div>
                             </div>
                           </div>

@@ -1,15 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, getDocs, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-
-const googleProvider = new GoogleAuthProvider();
-
-export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
 export enum OperationType {
   CREATE = 'create',
@@ -42,12 +38,10 @@ export const saveAQIRecord = async (record: {
   location: { lat: number; lng: number };
   address: string;
 }) => {
-  if (!auth.currentUser) return;
   const path = 'air_quality_history';
   try {
     await addDoc(collection(db, path), {
       ...record,
-      userId: auth.currentUser.uid,
       timestamp: serverTimestamp(),
     });
   } catch (error) {
@@ -56,12 +50,10 @@ export const saveAQIRecord = async (record: {
 };
 
 export const getHistory = async (count = 20) => {
-  if (!auth.currentUser) return [];
   const path = 'air_quality_history';
   try {
     const q = query(
       collection(db, path),
-      where('userId', '==', auth.currentUser.uid),
       orderBy('timestamp', 'desc'),
       limit(count)
     );
