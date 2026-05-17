@@ -391,8 +391,8 @@ export default function App() {
                 <div className="w-full lg:col-span-8 lg:order-1 flex flex-col gap-8">
                   <div className="relative w-full aspect-[3/4] md:aspect-video lg:aspect-auto lg:h-[680px] bg-navy-900 rounded-[2.5rem] md:rounded-[4rem] overflow-hidden border border-white/10 shadow-2xl group ring-1 ring-white/5 mx-auto">
                     {!isCapturing ? (
-                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-12 bg-navy-950/40 backdrop-blur-3xl p-10 overflow-hidden">
-                          <div className="relative p-12">
+                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 md:gap-12 bg-navy-950/40 backdrop-blur-3xl p-6 md:p-10 overflow-hidden">
+                          <div className="relative p-8 md:p-12">
                             {/* Decorative Background Glow - Contained */}
                             <div className="absolute inset-0 bg-blue-500 rounded-full blur-[60px] opacity-10 animate-pulse-glow scale-75"></div>
                             
@@ -416,11 +416,11 @@ export default function App() {
                               </div>
                             </div>
                           </div>
-                          <div className="text-center px-8 relative z-10">
-                            <h3 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+                          <div className="text-center px-6 relative z-10">
+                            <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight">
                               {isInitializing ? "Booting Neural Core..." : "Sync Reality"}
                             </h3>
-                            <p className="text-base md:text-lg text-slate-400 mt-4 max-w-sm leading-relaxed font-medium mx-auto">
+                            <p className="text-sm md:text-base text-slate-400 mt-2 md:mt-4 max-w-xs md:max-w-sm leading-relaxed font-medium mx-auto">
                               {isInitializing 
                                 ? "Establishing encrypted link with satellite vision cluster..." 
                                 : "Akses sistem penglihatan AI untuk modulasi data kualitas udara real-time melalui visibilitas atmosfer."}
@@ -431,7 +431,7 @@ export default function App() {
                               <div className="absolute -inset-4 bg-blue-500/10 blur-2xl rounded-full opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500"></div>
                               <button 
                                 onClick={startCamera}
-                                className="relative bg-blue-600 hover:bg-blue-500 text-white px-12 py-5 rounded-2xl font-black transition-all shadow-xl shadow-blue-900/40 hover:scale-105 active:scale-95 flex items-center gap-3 group"
+                                className="relative bg-blue-600 hover:bg-blue-500 text-white px-8 md:px-12 py-4 md:py-5 rounded-2xl font-black transition-all shadow-xl shadow-blue-900/40 hover:scale-105 active:scale-95 flex items-center gap-3 group text-sm md:text-base"
                               >
                                 <Wind className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700" />
                                 Inisialisasi Scan
