@@ -8,12 +8,12 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from "recharts";
 import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
-import { auth, saveAQIRecord, getHistory } from "./lib/firebase";
+import { auth, saveAQIRecord, getHistory, testFirestoreConnection } from "./lib/firebase";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
 
 import { PollutionMap } from "./components/PollutionMap";
@@ -68,6 +68,7 @@ export default function App() {
     tempOffset: 0,
     humidityOffset: 0
   });
+  const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -108,6 +109,7 @@ export default function App() {
 
   // Auth State
   useEffect(() => {
+    testFirestoreConnection();
     loadHistory();
   }, []);
 
@@ -874,45 +876,80 @@ export default function App() {
                       </div>
                     </motion.div>
 
-                    {/* Real-time Trend Graph */}
-                    <div className="glass-dark rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden h-[180px]">
+                    {/* Real-time Trend / Comparison Graph */}
+                    <div className="glass-dark rounded-[2.5rem] p-6 border border-white/5 relative overflow-hidden min-h-[220px]">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Real-time Trend</span>
-                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Last 5 Minutes</span>
+                          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                            {selectedForComparison.length > 0 ? "Comparative Diagnostics" : "Real-time Trend"}
+                          </span>
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">
+                            {selectedForComparison.length > 0 ? `Comparing ${selectedForComparison.length} Nodes` : "Last 5 Minutes"}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live</span>
-                        </div>
+                        {selectedForComparison.length === 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live</span>
+                          </div>
+                        )}
+                        {selectedForComparison.length > 0 && (
+                          <button 
+                            onClick={() => setSelectedForComparison([])}
+                            className="text-[8px] font-black text-slate-500 hover:text-white uppercase tracking-widest border border-white/10 px-2 py-1 rounded-md transition-colors"
+                          >
+                            Reset
+                          </button>
+                        )}
                       </div>
                       
-                      <div className="h-24 w-full">
+                      <div className="h-32 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={realTimeHistory}>
-                            <defs>
-                              <linearGradient id="colorRtAqi" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <XAxis dataKey="timestamp" hide />
-                            <YAxis hide domain={['auto', 'auto']} />
-                            <Tooltip 
-                               contentStyle={{ backgroundColor: '#071226', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
-                               labelFormatter={(val) => new Date(val).toLocaleTimeString()}
-                            />
-                            <Area 
-                              type="monotone" 
-                              dataKey="aqi" 
-                              stroke="#3b82f6" 
-                              strokeWidth={3} 
-                              fillOpacity={1} 
-                              fill="url(#colorRtAqi)" 
-                              animationDuration={1000}
-                              isAnimationActive={true}
-                            />
-                          </AreaChart>
+                          {selectedForComparison.length > 0 ? (
+                            <BarChart data={history.filter(h => selectedForComparison.includes(h.id)).reverse()}>
+                              <XAxis 
+                                dataKey="timestamp" 
+                                tickFormatter={(val) => new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                hide 
+                              />
+                              <YAxis hide domain={[0, 'auto']} />
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: '#071226', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
+                                labelFormatter={(val) => new Date(val).toLocaleString()}
+                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                              />
+                              <Bar dataKey="aqi" radius={[4, 4, 0, 0]} animationDuration={1000}>
+                                {history.filter(h => selectedForComparison.includes(h.id)).reverse().map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={getAQIColor(entry.aqi).includes('emerald') ? '#10b981' : entry.aqi > 150 ? '#ef4444' : entry.aqi > 100 ? '#f97316' : '#eab308'} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          ) : (
+                            <AreaChart data={realTimeHistory}>
+                              <defs>
+                                <linearGradient id="colorRtAqi" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="timestamp" hide />
+                              <YAxis hide domain={['auto', 'auto']} />
+                              <Tooltip 
+                                 contentStyle={{ backgroundColor: '#071226', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
+                                 labelFormatter={(val) => new Date(val).toLocaleTimeString()}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="aqi" 
+                                stroke="#3b82f6" 
+                                strokeWidth={3} 
+                                fillOpacity={1} 
+                                fill="url(#colorRtAqi)" 
+                                animationDuration={1000}
+                                isAnimationActive={true}
+                              />
+                            </AreaChart>
+                          )}
                         </ResponsiveContainer>
                       </div>
                     </div>
@@ -1046,6 +1083,20 @@ export default function App() {
                     <table className="w-full text-left text-sm min-w-[800px] md:min-w-full">
                       <thead>
                         <tr className="bg-white/5 text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">
+                          <th className="px-4 md:px-8 py-5 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedForComparison.length === history.length && history.length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedForComparison(history.map(l => l.id));
+                                } else {
+                                  setSelectedForComparison([]);
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-white/10 bg-navy-950 accent-blue-500"
+                            />
+                          </th>
                           <th className="px-4 md:px-8 py-5">Temporal Stamp</th>
                           <th className="px-4 md:px-8 py-5">Sector Address</th>
                           <th className="px-4 md:px-8 py-5 text-center">Indeks</th>
@@ -1055,7 +1106,24 @@ export default function App() {
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {history.length > 0 ? history.map((log) => (
-                          <tr key={log.id} className="hover:bg-white/[0.02] transition-colors group">
+                          <tr key={log.id} className={cn(
+                            "hover:bg-white/[0.02] transition-colors group",
+                            selectedForComparison.includes(log.id) && "bg-blue-500/5"
+                          )}>
+                            <td className="px-4 md:px-8 py-6 text-center">
+                              <input 
+                                type="checkbox" 
+                                checked={selectedForComparison.includes(log.id)}
+                                onChange={() => {
+                                  setSelectedForComparison(prev => 
+                                    prev.includes(log.id) 
+                                      ? prev.filter(id => id !== log.id) 
+                                      : [...prev, log.id]
+                                  );
+                                }}
+                                className="w-4 h-4 rounded border-white/10 bg-navy-950 accent-blue-500"
+                              />
+                            </td>
                             <td className="px-4 md:px-8 py-6 font-bold text-slate-400 group-hover:text-white transition-colors">
                               {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'N/A'}
                             </td>

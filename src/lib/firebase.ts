@@ -9,7 +9,9 @@ import {
   orderBy, 
   limit, 
   serverTimestamp, 
-  Timestamp 
+  Timestamp,
+  doc,
+  getDocFromServer 
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -18,6 +20,17 @@ export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
+
+export async function testFirestoreConnection() {
+  try {
+    await getDocFromServer(doc(db, 'system', 'connection_test'));
+    console.log("Firestore connection test: Success");
+    return true;
+  } catch (error) {
+    console.error("Firestore connection test: Error:", error);
+    return false;
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
