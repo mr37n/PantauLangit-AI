@@ -325,10 +325,9 @@ export default function App() {
       )}>
         <div className="p-8">
           <div className="flex items-center gap-4">
-            <Logo className={cn("w-12 h-12", theme === 'dark' ? "text-white" : "text-blue-600")} />
+            <Logo className={cn("w-10 h-10", theme === 'dark' ? "text-white" : "text-blue-600")} />
             <div className="flex flex-col">
               <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>Cakrawala AI</h1>
-              <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider mt-1">Measuring Air Quality Through the Horizon</span>
             </div>
           </div>
         </div>
