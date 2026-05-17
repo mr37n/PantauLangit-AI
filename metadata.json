@@ -1,0 +1,11 @@
+{
+  "name": "Cakrawala AI",
+  "description": "Aplikasi analisis kualitas udara cerdas menggunakan video real-time, data GPS, dan integrasi sensor fusion untuk estimasi AQI yang akurat.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

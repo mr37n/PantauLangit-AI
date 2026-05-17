@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) 
+        && incoming().userId == userId
+        && incoming().email == request.auth.token.email
+        && incoming().createdAt == request.time;
+      allow update: if isOwner(userId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email'])
+        && incoming().email == request.auth.token.email;
+    }
+
+    // Air Quality History Collection
+    function isValidRecord(data) {
+      return data.userId == request.auth.uid
+        && data.aqi is number
+        && data.timestamp == request.time
+        && data.status is string
+        && data.status.size() <= 64;
+    }
+
+    match /air_quality_history/{recordId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() 
+        && isValidRecord(incoming())
+        && isValidId(recordId);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

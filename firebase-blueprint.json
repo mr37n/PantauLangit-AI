@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "AirQualityRecord": {
+      "title": "Air Quality Record",
+      "description": "Historical air quality data recorded by the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "aqi": { "type": "number" },
+        "status": { "type": "string" },
+        "visibilityIndex": { "type": "number" },
+        "pm25": { "type": "number" },
+        "location": { "type": "object" },
+        "address": { "type": "string" }
+      },
+      "required": ["userId", "timestamp", "aqi"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
+    "air_quality_history/{recordId}": {
+      "schema": "AirQualityRecord",
+      "description": "Historical air quality measurements"
+    }
+  }
+}
