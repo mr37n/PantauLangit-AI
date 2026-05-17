@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  Camera, Map as MapIcon, History, FileText, Bell, 
+  Camera, Map as MapIcon, History, FileText, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
   Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
-  Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor, LogOut
+  Download, RefreshCw, BarChart3, Settings, Moon, Sun, LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
@@ -13,28 +13,13 @@ import {
 import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
-import { auth, saveAQIRecord, getHistory, testFirestoreConnection } from "./lib/firebase";
+import { saveAQIRecord, getHistory, testFirestoreConnection } from "./lib/firebase";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
+import { HistoryRecord, AnalysisResult } from "./types";
 
 import { PollutionMap } from "./components/PollutionMap";
 
-// Types
-interface AnalysisResult {
-  visibilityIndex: number;
-  estimatedAQI: number;
-  dominantParticulate: string;
-  confidence: number;
-  description: string;
-  status: string;
-}
-
-interface LocalPollution {
-  station: string;
-  ispu: number;
-  pm25: number;
-  pm10: number;
-  timestamp: string;
-}
+// Remove local types as they are now in types.ts
 
 // Maps Configuration
 const MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
@@ -46,14 +31,13 @@ export default function App() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [localData, setLocalData] = useState<LocalPollution | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
-  const [realTimeHistory, setRealTimeHistory] = useState<any[]>([]);
+  const [realTimeHistory, setRealTimeHistory] = useState<HistoryRecord[]>([]);
   const [weatherData, setWeatherData] = useState<{
     temp: number;
     humidity: number;
@@ -62,7 +46,12 @@ export default function App() {
     condition: string;
   } | null>(null);
   const [showWeatherOverlay, setShowWeatherOverlay] = useState(true);
-  const [calibration, setCalibration] = useState({
+  const [calibration, setCalibration] = useState<{
+    pm25Offset: number;
+    pm10Offset: number;
+    tempOffset: number;
+    humidityOffset: number;
+  }>({
     pm25Offset: 0,
     pm10Offset: 0,
     tempOffset: 0,
@@ -75,6 +64,40 @@ export default function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Load History
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await getHistory();
+      if (data && data.length > 0) {
+        setHistory(data);
+      }
+    } catch (err) {
+      console.warn("Could not load initial history:", err);
+    }
+  }, []);
+
+  const fetchWeatherData = useCallback(async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`);
+      const data = await res.json();
+      if (data.current) {
+        const descriptions: Record<number, string> = {
+          0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+          45: "Fog", 48: "Rime Fog", 51: "Drizzle", 61: "Rain", 95: "Thunderstorm"
+        };
+        setWeatherData({
+          temp: data.current.temperature_2m,
+          humidity: data.current.relative_humidity_2m,
+          wind: data.current.wind_speed_10m,
+          uv: data.current.uv_index,
+          condition: descriptions[data.current.weather_code as number] || "Clear"
+        });
+      }
+    } catch (err) {
+      console.error("OpenMeteo fetch failed:", err);
+    }
+  }, []);
 
   // Update real-time history for graph (last 5 minutes)
   useEffect(() => {
@@ -98,20 +121,23 @@ export default function App() {
 
   // Google Maps Auth Failure Detection
   useEffect(() => {
-    (window as any).gm_authFailure = () => {
+    (window as Window & { gm_authFailure?: () => void }).gm_authFailure = () => {
       setMapError(true);
       toast.error("Google Maps API Error: API tidak diaktifkan");
     };
     return () => {
-      delete (window as any).gm_authFailure;
+      delete (window as Window & { gm_authFailure?: () => void }).gm_authFailure;
     };
   }, []);
 
   // Auth State
   useEffect(() => {
     testFirestoreConnection();
-    loadHistory();
-  }, []);
+    const init = async () => {
+      await loadHistory();
+    };
+    init();
+  }, [loadHistory]);
 
   // Location Watcher
   useEffect(() => {
@@ -122,49 +148,16 @@ export default function App() {
           setLocation(newPos);
           fetchWeatherData(newPos.lat, newPos.lng);
         },
-        (err) => toast.error("Gagal mendapatkan lokasi")
+        () => toast.error("Gagal mendapatkan lokasi")
       );
     }
-  }, []);
+  }, [fetchWeatherData]);
 
-  const fetchWeatherData = async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`);
-      const data = await res.json();
-      if (data.current) {
-        const descriptions: Record<number, string> = {
-          0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-          45: "Fog", 48: "Rime Fog", 51: "Drizzle", 61: "Rain", 95: "Thunderstorm"
-        };
-        setWeatherData({
-          temp: data.current.temperature_2m,
-          humidity: data.current.relative_humidity_2m,
-          wind: data.current.wind_speed_10m,
-          uv: data.current.uv_index,
-          condition: descriptions[data.current.weather_code] || "Clear"
-        });
-      }
-    } catch (err) {
-      console.error("OpenMeteo fetch failed:", err);
-    }
-  };
-
-  // Load History
-  const loadHistory = async () => {
-    try {
-      const data = await getHistory();
-      if (data && data.length > 0) {
-        setHistory(data);
-      }
-    } catch (err) {
-      console.warn("Could not load initial history:", err);
-    }
-  };
 
   // Notification logic for Poor AQI
   useEffect(() => {
     if (analysis && analysis.estimatedAQI > 100) {
-       toast((t) => (
+       toast(() => (
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 font-bold text-red-500">
             <AlertTriangle className="w-4 h-4" />
@@ -215,7 +208,7 @@ export default function App() {
       ];
 
       let stream: MediaStream | null = null;
-      let lastError: any = null;
+      let lastError: Error | null = null;
 
       for (const constraint of constraints) {
         try {
@@ -329,6 +322,7 @@ export default function App() {
         loadHistory();
       }
     } catch (err) {
+      console.error("Analysis Error:", err);
       toast.error("Gagal menganalisis gambar");
     } finally {
       setIsAnalyzing(false);
@@ -451,7 +445,7 @@ export default function App() {
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
+              onClick={() => setActiveTab(item.id as "analysis" | "history" | "map" | "settings")}
               className={cn(
                 "w-full px-6 py-5 rounded-2xl flex items-center gap-5 transition-all duration-300 group relative overflow-hidden border",
                 activeTab === item.id 
@@ -1386,7 +1380,7 @@ export default function App() {
                           <div className="flex items-center gap-3">
                             <input 
                               type="number" 
-                              value={(calibration as any)[item.key]} 
+                              value={calibration[item.key as keyof typeof calibration]} 
                               onChange={(e) => setCalibration(prev => ({ ...prev, [item.key]: parseFloat(e.target.value) || 0 }))}
                               className={cn(
                                 "w-full bg-transparent border-b outline-none text-lg font-black transition-colors px-1",
@@ -1397,13 +1391,13 @@ export default function App() {
                           </div>
                           <div className="mt-4 flex gap-2">
                              <button 
-                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: (prev as any)[item.key] - 1 }))}
+                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: prev[item.key as keyof typeof prev] - 1 }))}
                                className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-colors"
                              >
                                 <Sliders className="w-3 h-3 rotate-180" />
                              </button>
                              <button 
-                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: (prev as any)[item.key] + 1 }))}
+                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: prev[item.key as keyof typeof prev] + 1 }))}
                                className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-colors"
                              >
                                 <Sliders className="w-3 h-3" />
@@ -1455,7 +1449,7 @@ export default function App() {
         ].map(item => (
           <button
             key={item.id}
-            onClick={() => setActiveTab(item.id as any)}
+            onClick={() => setActiveTab(item.id as "analysis" | "history" | "map" | "settings")}
             className={cn(
               "flex flex-col items-center gap-1.5 px-6 py-2 rounded-2xl transition-all",
               activeTab === item.id 

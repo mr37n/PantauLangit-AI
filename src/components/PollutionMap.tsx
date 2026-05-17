@@ -2,11 +2,11 @@ import React, { useMemo } from 'react';
 import { 
   APIProvider, 
   Map, 
-  AdvancedMarker, 
-  useAdvancedMarkerRef
+  AdvancedMarker
 } from '@vis.gl/react-google-maps';
 import { Wind, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { HistoryRecord } from '../types';
 
 // --- MAP STYLING (DARK MODE FUTURISTIK) ---
 const DARK_MAP_STYLES = [
@@ -118,7 +118,7 @@ const MOCK_POLLUTION_DATA: PollutionData[] = [
 export const PollutionMap: React.FC<{
   apiKey: string;
   userLocation: { lat: number; lng: number } | null;
-  historyData?: any[];
+  historyData?: HistoryRecord[];
 }> = ({ apiKey, userLocation, historyData = [] }) => {
   const center = useMemo(() => userLocation || { lat: -6.2, lng: 106.8166 }, [userLocation]);
 

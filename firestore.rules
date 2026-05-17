@@ -37,7 +37,12 @@ service cloud.firestore {
       allow list, get: if true;
       allow create: if isValidRecord(incoming())
         && isValidId(recordId);
-      allow delete: if false; // Prevention of public deletions
+      allow delete: if false; 
+    }
+
+    // System Collection for Connection Tests
+    match /system/{docId} {
+      allow get: if docId == "connection_test";
     }
   }
 }

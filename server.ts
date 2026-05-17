@@ -96,8 +96,7 @@ app.post("/api/analyze-frame", async (req, res) => {
 });
 
 // Mock endpoint for Sensor Fusion / Local Pollution
-app.get("/api/local-pollution", async (req, res) => {
-  const { lat, lng } = req.query;
+app.get("/api/local-pollution", async (_req, res) => {
   // In a real app, we'd fetch from WAQI or IQAir
   // For this project, we'll generate realistic random data based on GPS if we don't have a key
   res.json({

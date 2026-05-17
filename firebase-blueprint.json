@@ -36,6 +36,10 @@
     "air_quality_history/{recordId}": {
       "schema": "AirQualityRecord",
       "description": "Historical air quality measurements"
+    },
+    "system/{docId}": {
+      "schema": "object",
+      "description": "System configuration and connectivity tests"
     }
   }
 }

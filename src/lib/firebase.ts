@@ -14,6 +14,7 @@ import {
   getDocFromServer 
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { HistoryRecord } from '../types';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -74,7 +75,7 @@ export const saveAQIRecord = async (record: {
   }
 };
 
-export const getHistory = async (count = 20) => {
+export const getHistory = async (count = 20): Promise<HistoryRecord[]> => {
   const path = 'air_quality_history';
   try {
     const q = query(
@@ -87,7 +88,7 @@ export const getHistory = async (count = 20) => {
       id: doc.id,
       ...doc.data(),
       timestamp: (doc.data().timestamp as Timestamp)?.toDate()
-    }));
+    })) as HistoryRecord[];
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
     return [];
