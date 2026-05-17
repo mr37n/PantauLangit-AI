@@ -3,7 +3,7 @@ import {
   Camera, Map as MapIcon, History, FileText, Bell, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
   Navigation, Wind, Droplets, Thermometer,
-  Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor
+  Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor, LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
@@ -50,9 +50,13 @@ export default function App() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   // Google Maps Auth Failure Detection
   useEffect(() => {
@@ -106,8 +110,7 @@ export default function App() {
   // Camera Management
   const startCamera = async () => {
     setIsInitializing(true);
-    // Artificial delay for cooler "booting" feel
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    setRecordedVideoUrl(null);
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -122,10 +125,39 @@ export default function App() {
         setIsCapturing(true);
       }
     } catch (err) {
+      console.error("Camera Error:", err);
       toast.error("Gagal mengakses kamera. Pastikan izin diberikan.");
     } finally {
       setIsInitializing(false);
     }
+  };
+
+  const startRecording = () => {
+    if (!videoRef.current?.srcObject) return;
+    const stream = videoRef.current.srcObject as MediaStream;
+    
+    chunksRef.current = [];
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    mediaRecorderRef.current = mediaRecorder;
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      setRecordedVideoUrl(url);
+      setIsRecording(false);
+      toast.success("Rekaman video selesai.");
+    };
+
+    mediaRecorder.start();
+    setIsRecording(true);
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
   };
 
   const stopCamera = () => {
@@ -133,6 +165,16 @@ export default function App() {
     stream?.getTracks().forEach(track => track.stop());
     setIsCapturing(false);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   // Analysis Logic
   const analyzeFrame = async () => {
@@ -427,7 +469,7 @@ export default function App() {
                        </div>
                     ) : (
                       <>
-                        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                         <canvas ref={canvasRef} className="hidden" />
                         <div className="absolute inset-0 bg-gradient-to-t from-navy-950/90 via-transparent to-navy-950/40 pointer-events-none"></div>
                         
@@ -463,8 +505,35 @@ export default function App() {
                           </div>
                           
                           <div className="flex items-center gap-3">
+                            {recordedVideoUrl ? (
+                              <a 
+                                href={recordedVideoUrl} 
+                                download={`Cakrawala_Rec_${new Date().getTime()}.webm`}
+                                className="glass hover:bg-emerald-500/10 text-emerald-400 px-6 h-16 rounded-3xl transition-all border-emerald-500/20 flex items-center gap-3 active:scale-95"
+                              >
+                                <Download className="w-5 h-5" />
+                                <span className="text-xs font-black uppercase tracking-widest">Download</span>
+                              </a>
+                            ) : (
+                              <button 
+                                onClick={isRecording ? stopRecording : startRecording}
+                                className={cn(
+                                  "p-5 rounded-3xl transition-all border active:scale-95 flex items-center justify-center min-w-[64px]",
+                                  isRecording 
+                                    ? "bg-red-500/10 border-red-500/30 text-red-500 animate-pulse" 
+                                    : "glass border-white/20 text-white hover:bg-white/10"
+                                )}
+                                title={isRecording ? "Stop Recording" : "Start Video Rec"}
+                              >
+                                <div className={cn("transition-all duration-300", isRecording ? "w-4 h-4 bg-red-500 rounded-sm" : "w-6 h-6 border-2 border-white rounded-full")}></div>
+                              </button>
+                            )}
+                            
                             <button 
-                              onClick={stopCamera}
+                              onClick={() => {
+                                stopCamera();
+                                if (isRecording) stopRecording();
+                              }}
                               className="glass hover:bg-red-500/10 text-red-400 p-5 rounded-3xl transition-all border-red-500/20 active:scale-95"
                             >
                               <LogOut className="w-6 h-6 rotate-180" />
