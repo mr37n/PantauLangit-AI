@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Camera, Map as MapIcon, History, FileText, Bell, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
-  Navigation, Wind, Droplets, Thermometer, Cloud, X,
+  Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
   Download, RefreshCw, BarChart3, Settings, Moon, Sun, Monitor, LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
-import { APIProvider, Map, AdvancedMarker, Pin } from "@vis.gl/react-google-maps";
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from "recharts";
@@ -16,6 +15,8 @@ import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
 import { auth, saveAQIRecord, getHistory } from "./lib/firebase";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
+
+import { PollutionMap } from "./components/PollutionMap";
 
 // Types
 interface AnalysisResult {
@@ -61,11 +62,18 @@ export default function App() {
     condition: string;
   } | null>(null);
   const [showWeatherOverlay, setShowWeatherOverlay] = useState(true);
+  const [calibration, setCalibration] = useState({
+    pm25Offset: 0,
+    pm10Offset: 0,
+    tempOffset: 0,
+    humidityOffset: 0
+  });
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Update real-time history for graph (last 5 minutes)
   useEffect(() => {
@@ -168,6 +176,23 @@ export default function App() {
     }
   }, [analysis]);
 
+  // Reset camera when unmounting or switching tabs
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // Attach stream when video element is ready
+  useEffect(() => {
+    if (isCapturing && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.error);
+    }
+  }, [isCapturing]);
+
   // Camera Management
   const startCamera = async () => {
     setIsInitializing(true);
@@ -202,26 +227,17 @@ export default function App() {
 
       if (!stream) throw lastError || new Error("No stream acquired");
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Force play and handle potential play errors
-        const playPromise = videoRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(e => {
-            console.error("Autoplay prevented:", e);
-            // In some browsers we might need a user click to play
-          });
-        }
-        setIsCapturing(true);
-      }
+      streamRef.current = stream;
+      setIsCapturing(true);
     } catch (err) {
       console.error("Camera Final Error:", err);
       if (err instanceof Error) {
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        const name = err.name;
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           toast.error("Izin ditolak. Silakan izinkan kamera di browser Anda.");
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
           toast.error("Kamera tidak ditemukan.");
-        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
           toast.error("Kamera sedang digunakan oleh aplikasi lain.");
         } else {
           toast.error(`Kamera error: ${err.message}`);
@@ -232,6 +248,15 @@ export default function App() {
     } finally {
       setIsInitializing(false);
     }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCapturing(false);
+    setAnalysis(null);
   };
 
   const startRecording = () => {
@@ -261,22 +286,6 @@ export default function App() {
   const stopRecording = () => {
     mediaRecorderRef.current?.stop();
   };
-
-  const stopCamera = () => {
-    const stream = videoRef.current?.srcObject as MediaStream;
-    stream?.getTracks().forEach(track => track.stop());
-    setIsCapturing(false);
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
 
   // Analysis Logic
   const analyzeFrame = async () => {
@@ -570,6 +579,17 @@ export default function App() {
                         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                         <canvas ref={canvasRef} className="hidden" />
                         <div className="absolute inset-0 bg-gradient-to-t from-navy-950/90 via-transparent to-navy-950/40 pointer-events-none"></div>
+                        
+                        {/* Stop Scan Button */}
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40">
+                          <button 
+                            onClick={stopCamera}
+                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 backdrop-blur-xl px-8 py-3 rounded-2xl font-black transition-all flex items-center gap-3 active:scale-95 group shadow-2xl"
+                          >
+                            <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+                            Hentikan Scan
+                          </button>
+                        </div>
                         
                         {/* Weather Overlay Panel */}
                         <AnimatePresence>
@@ -1076,42 +1096,12 @@ export default function App() {
                 className="h-[calc(100vh-180px)] w-full rounded-[3.5rem] overflow-hidden border border-white/5 relative shadow-2xl"
               >
                 <div className="absolute inset-0 bg-navy-950/20 backdrop-blur-sm z-0"></div>
-                <APIProvider apiKey={MAPS_API_KEY} version="weekly">
-                  <Map
-                    defaultCenter={location || { lat: -6.2, lng: 106.8 }}
-                    defaultZoom={13}
-                    gestureHandling={'greedy'}
-                    disableDefaultUI={true}
-                    mapId="cakrawala_pollution_map"
-                    internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                    className="w-full h-full grayscale invert opacity-70 contrast-[1.4]"
-                  >
-    {location && (
-                      <AdvancedMarker position={location}>
-                         <div className="relative flex items-center justify-center">
-                            <div className="absolute w-10 h-10 bg-blue-500/40 rounded-full animate-pulse-subtle"></div>
-                            <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(37,99,235,0.6)] z-10"></div>
-                         </div>
-                      </AdvancedMarker>
-                    )}
-                    {history.map((log, idx) => log.location && (
-                      <AdvancedMarker key={idx} position={log.location}>
-                         <div className={cn(
-                           "flex items-center justify-center p-1.5 rounded-full border border-white/30 transition-all hover:scale-125 cursor-pointer shadow-xl",
-                           log.aqi > 150 ? "bg-rose-600 shadow-rose-900/60" : 
-                           log.aqi > 100 ? "bg-orange-600 shadow-orange-900/60" : 
-                           log.aqi > 50 ? "bg-amber-500 shadow-amber-900/60" : 
-                           "bg-emerald-600 shadow-emerald-900/60"
-                         )}>
-                           {log.aqi > 150 ? <Wind className="w-3.5 h-3.5 text-white" /> : 
-                            log.aqi > 100 ? <AlertTriangle className="w-3.5 h-3.5 text-white" /> : 
-                            log.aqi > 50 ? <Info className="w-3.5 h-3.5 text-white" /> : 
-                            <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                         </div>
-                      </AdvancedMarker>
-                    ))}
-                  </Map>
-                </APIProvider>
+                
+                <PollutionMap 
+                  apiKey={MAPS_API_KEY} 
+                  userLocation={location} 
+                  historyData={history}
+                />
                 
                 {/* Map Overlay Stats */}
                 <div className="absolute top-10 right-10 z-10 w-72 space-y-4">
@@ -1122,7 +1112,7 @@ export default function App() {
                         { label: "Optimal (0-50)", color: "bg-emerald-500" },
                         { label: "Modulated (51-100)", color: "bg-yellow-500" },
                         { label: "Alert (101-150)", color: "bg-orange-500" },
-                        { label: "Critical (151+)", color: "bg-red-500" },
+                        { label: "Critical (151+)", color: "bg-rose-600" },
                       ].map(item => (
                         <div key={item.label} className="flex items-center gap-3">
                           <div className={cn("w-3 h-3 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]", item.color)}></div>
@@ -1223,7 +1213,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Export Center */}
+                  {/* Reporting Center */}
                   <div className={cn(
                     "glass border p-8 rounded-[2.5rem] relative overflow-hidden group transition-all duration-500",
                     theme === 'dark' ? "border-white/5" : "bg-white/40 border-slate-200"
@@ -1261,6 +1251,98 @@ export default function App() {
                         <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Total Logs Ready: {history.length}</span>
                         <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Export Limit: A4 Format</span>
                       </div>
+
+                      <div className="pt-4 border-t border-white/5">
+                        <button 
+                          onClick={() => {
+                            if (confirm("Are you sure you want to delete all historical AQI records? This action cannot be undone.")) {
+                              setHistory([]);
+                              toast.success("Historical data has been cleared.");
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-3 bg-red-500/10 hover:bg-red-500/20 py-4 rounded-2xl font-black text-xs transition-all text-red-500 border border-red-500/20"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          CLEAR ALL LOG DATA
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sensor Calibration */}
+                  <div className={cn(
+                    "glass border p-8 rounded-[2.5rem] relative overflow-hidden group transition-all duration-500 col-span-1 md:col-span-2",
+                    theme === 'dark' ? "border-white/5" : "bg-white/40 border-slate-200"
+                  )}>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[80px] rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center border transition-colors",
+                          theme === 'dark' ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-50 border-emerald-100"
+                        )}>
+                          <Cpu className={cn("w-6 h-6", theme === 'dark' ? "text-emerald-400" : "text-emerald-600")} />
+                        </div>
+                        <div>
+                          <h3 className={cn("text-xl font-black tracking-tight transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>Sensor Calibration</h3>
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Precision Tuning & Data Management</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setCalibration({ pm25Offset: 0, pm10Offset: 0, tempOffset: 0, humidityOffset: 0 });
+                          toast.success("Sensor offsets have been reset to zero.");
+                        }}
+                        className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-500/20 transition-all"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Reset All Sensors
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {[
+                        { key: 'pm25Offset', label: 'PM2.5 Offset', icon: Wind, unit: 'µg/m³' },
+                        { key: 'pm10Offset', label: 'PM10 Offset', icon: Navigation, unit: 'µg/m³' },
+                        { key: 'tempOffset', label: 'Temp Offset', icon: Thermometer, unit: '°C' },
+                        { key: 'humidityOffset', label: 'Humid Offset', icon: Droplets, unit: '%' }
+                      ].map(item => (
+                        <div key={item.key} className={cn(
+                          "p-6 rounded-3xl border transition-colors relative",
+                          theme === 'dark' ? "bg-white/[0.02] border-white/5 hover:border-white/10" : "bg-slate-50 border-slate-100 hover:border-slate-200"
+                        )}>
+                          <div className="flex items-center gap-3 mb-4">
+                            <item.icon className="w-4 h-4 text-emerald-500" />
+                            <span className={cn("text-xs font-bold uppercase tracking-widest transition-colors", theme === 'dark' ? "text-slate-400" : "text-slate-600")}>{item.label}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="number" 
+                              value={(calibration as any)[item.key]} 
+                              onChange={(e) => setCalibration(prev => ({ ...prev, [item.key]: parseFloat(e.target.value) || 0 }))}
+                              className={cn(
+                                "w-full bg-transparent border-b outline-none text-lg font-black transition-colors px-1",
+                                theme === 'dark' ? "border-white/10 text-white focus:border-emerald-500" : "border-slate-200 text-slate-900 focus:border-emerald-600"
+                              )}
+                            />
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{item.unit}</span>
+                          </div>
+                          <div className="mt-4 flex gap-2">
+                             <button 
+                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: (prev as any)[item.key] - 1 }))}
+                               className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-colors"
+                             >
+                                <Sliders className="w-3 h-3 rotate-180" />
+                             </button>
+                             <button 
+                               onClick={() => setCalibration(prev => ({ ...prev, [item.key]: (prev as any)[item.key] + 1 }))}
+                               className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 transition-colors"
+                             >
+                                <Sliders className="w-3 h-3" />
+                             </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
