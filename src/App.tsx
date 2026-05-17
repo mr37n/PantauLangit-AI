@@ -86,8 +86,14 @@ export default function App() {
 
   // Load History
   const loadHistory = async () => {
-    const data = await getHistory();
-    setHistory(data);
+    try {
+      const data = await getHistory();
+      if (data && data.length > 0) {
+        setHistory(data);
+      }
+    } catch (err) {
+      console.warn("Could not load initial history:", err);
+    }
   };
 
   // Notification logic for Poor AQI
@@ -119,40 +125,54 @@ export default function App() {
     }
 
     try {
-      // Try high quality first
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          } 
-        });
-      } catch (e) {
-        console.warn("High quality/Environment failed, falling back to basic video...", e);
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Successively try different constraints
+      const constraints = [
+        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        { video: { facingMode: "environment" } },
+        { video: true }
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: any = null;
+
+      for (const constraint of constraints) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraint);
+          if (stream) break;
+        } catch (e) {
+          lastError = e;
+          console.warn("Retrying camera with different constraints...", e);
+        }
       }
+
+      if (!stream) throw lastError || new Error("No stream acquired");
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(e => console.error("Video play error after load:", e));
-        };
+        // Force play and handle potential play errors
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            console.error("Autoplay prevented:", e);
+            // In some browsers we might need a user click to play
+          });
+        }
         setIsCapturing(true);
       }
     } catch (err) {
-      console.error("Camera Error Handle:", err);
+      console.error("Camera Final Error:", err);
       if (err instanceof Error) {
-        if (err.name === 'NotAllowedError') {
-          toast.error("Izin kamera ditolak. Silakan aktifkan di pengaturan browser.");
-        } else if (err.name === 'NotFoundError') {
-          toast.error("Tidak ada kamera yang ditemukan.");
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          toast.error("Izin ditolak. Silakan izinkan kamera di browser Anda.");
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          toast.error("Kamera tidak ditemukan.");
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          toast.error("Kamera sedang digunakan oleh aplikasi lain.");
         } else {
-          toast.error(`Gagal mengakses kamera: ${err.message}`);
+          toast.error(`Kamera error: ${err.message}`);
         }
       } else {
-        toast.error("Gagal mengakses kamera. Pastikan izin diberikan.");
+        toast.error("Gagal mengakses kamera.");
       }
     } finally {
       setIsInitializing(false);
@@ -225,8 +245,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: imageData,
-          location: location,
-          weather: { temp: 30, condition: "Sunny" } // Mocked weather
+          location: location
         })
       });
       const data = await res.json();
@@ -351,11 +370,9 @@ export default function App() {
         theme === 'dark' ? "bg-navy-900 border-white/5" : "bg-white border-slate-200"
       )}>
         <div className="p-8">
-          <div className="flex items-center gap-4">
-            <Logo className={cn("w-10 h-10", theme === 'dark' ? "text-white" : "text-blue-600")} />
-            <div className="flex flex-col">
-              <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>Cakrawala AI</h1>
-            </div>
+          <div className="flex items-center gap-3">
+            <Logo className={cn("w-8 h-8", theme === 'dark' ? "text-white" : "text-blue-600")} />
+            <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>Cakrawala AI</h1>
           </div>
         </div>
         
@@ -407,7 +424,7 @@ export default function App() {
           theme === 'dark' ? "bg-navy-950/95 border-white/5" : "bg-white/80 border-slate-200"
         )}>
           <div className="flex items-center gap-4 md:gap-8">
-             <Logo className={cn("w-10 h-10 md:hidden", theme === 'dark' ? "text-white" : "text-blue-600")} />
+             <Logo className={cn("w-8 h-8 md:hidden", theme === 'dark' ? "text-white" : "text-blue-600")} />
              <div className="flex flex-col">
                 <div className="flex items-center gap-3">
                   <span className={cn("w-2.5 h-2.5 rounded-full", location ? "bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.7)]" : "bg-red-500")}></span>
@@ -1094,10 +1111,10 @@ export default function App() {
                 )}>
                   <div className="flex items-center gap-6">
                     <div className={cn(
-                      "w-16 h-16 rounded-[2rem] flex items-center justify-center border shrink-0 transition-colors",
+                      "w-14 h-14 rounded-[1.5rem] flex items-center justify-center border shrink-0 transition-colors",
                       theme === 'dark' ? "bg-navy-900 border-white/10" : "bg-slate-50 border-slate-200"
                     )}>
-                      <Logo className={cn("w-10 h-10", theme === 'dark' ? "text-white" : "text-blue-600")} />
+                      <Logo className={cn("w-8 h-8", theme === 'dark' ? "text-white" : "text-blue-600")} />
                     </div>
                     <div>
                       <h4 className={cn("text-lg font-black transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>System Status: Collective Node</h4>
