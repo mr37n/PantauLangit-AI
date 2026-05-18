@@ -697,7 +697,7 @@ export default function App() {
                                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
                                 </div>
                               </div>
-                              <p className="text-[10px] font-black text-blue-500 text-center mt-4 uppercase tracking-[0.3em] drop-shadow-lg">Neural Focus</p>
+
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -780,10 +780,6 @@ export default function App() {
                         {/* Capture Controls */}
                         <div className="absolute bottom-10 left-6 right-6 z-20 flex flex-col items-center sm:flex-row sm:justify-between sm:items-end gap-6">
                           <div className="space-y-2 text-center sm:text-left">
-                             <div className="flex items-center justify-center sm:justify-start gap-2">
-                                <div className="h-0.5 w-8 bg-blue-500"></div>
-                                <p className="text-[9px] text-blue-400 uppercase tracking-[0.3em] font-black">Spatial Core</p>
-                             </div>
                              <h2 className="text-xl font-black text-white tracking-tighter">
                                {location ? locationName : "Grid Aquiring"}
                              </h2>
