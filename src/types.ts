@@ -23,6 +23,7 @@ export interface AnalysisResult {
   weather?: {
     temperature: number;
     windSpeed: number;
+    windDirection?: string;
     humidity: number;
     condition: string;
     effectOnPollution: string;

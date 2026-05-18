@@ -25,7 +25,7 @@ app.post("/api/analyze-frame", async (req, res) => {
     if (location && location.lat && location.lng) {
       try {
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,uv_index`
         );
         const data = await weatherRes.json();
         if (data.current) {
@@ -42,10 +42,17 @@ app.post("/api/analyze-frame", async (req, res) => {
             95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
           };
 
+          // Convert wind degree to direction string
+          const getWindDir = (deg: number) => {
+            const directions = ["Utara", "Timur Laut", "Timur", "Tenggara", "Selatan", "Barat Daya", "Barat", "Barat Laut"];
+            return directions[Math.round(deg / 45) % 8];
+          };
+
           weatherData = {
             temperature: `${data.current.temperature_2m}°C`,
             humidity: `${data.current.relative_humidity_2m}%`,
             windSpeed: `${data.current.wind_speed_10m} km/h`,
+            windDirection: getWindDir(data.current.wind_direction_10m),
             uvIndex: data.current.uv_index,
             condition: weatherDescriptions[data.current.weather_code] || "Unknown",
             conditionCode: data.current.weather_code
@@ -72,12 +79,13 @@ app.post("/api/analyze-frame", async (req, res) => {
       - confidence: (persentase keyakinan keseluruhan)
       - description: (analisis teks singkat tentang apa yang Anda lihat di frame terkait kualitas udara)
       - status: (misal: "Baik", "Sedang", "Tidak Sehat", "Berbahaya")
-      - weather: Objek yang berisi estimasi cuaca saat ini dari petunjuk visual:
+      - weather: Objek yang berisi estimasi cuaca saat ini dari petunjuk visual dan konteks:
           - temperature: (angka estimasi suhu dalam °C)
           - windSpeed: (angka estimasi kecepatan angin dalam km/jam)
+          - windDirection: (estimasi arah angin dalam Bahasa Indonesia, misal: "Utara", "Selatan")
           - humidity: (angka estimasi kelembapan dalam %)
           - condition: (Status cuaca: "Cerah", "Berawan", "Hujan", atau "Berkabut")
-          - effectOnPollution: (1 kalimat analisis dalam Bahasa Indonesia tentang bagaimana kondisi angin dan suhu saat itu memengaruhi kepekatan atau pergerakan polusi udara setempat)
+          - effectOnPollution: (Analisis mendalam dalam Bahasa Indonesia mengenai dampak cuaca terhadap polusi. Jelaskan bagaimana kecepatan angin (stagnasi vs dispersi), arah angin, suhu (misal: efek inversi), dan kondisi atmosfer secara spesifik memengaruhi kepekatan polusi udara setempat pada saat ini.)
       - pollutants: Array objek untuk PM2.5, PM10, dan Ozone (O3) dengan:
           - name: (misal: "PM2.5")
           - value: (estimasi angka)

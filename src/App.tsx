@@ -1345,7 +1345,7 @@ export default function App() {
                            </div>
                            <div className="flex flex-col items-center">
                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">WIND</span>
-                              <span className="text-xs font-black text-white">{analysis.weather.windSpeed}k</span>
+                              <span className="text-xs font-black text-white">{analysis.weather.windSpeed}k {analysis.weather.windDirection}</span>
                            </div>
                            <div className="flex flex-col items-center">
                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">HUM</span>
