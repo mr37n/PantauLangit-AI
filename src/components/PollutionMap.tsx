@@ -156,8 +156,8 @@ export const PollutionMap: React.FC<{
     <div className="w-full h-full relative">
       <APIProvider apiKey={apiKey}>
         <Map
-          defaultCenter={center}
-          defaultZoom={12}
+          center={center}
+          zoom={12}
           mapId="CAKRAWALA_DARK_MAP"
           gestureHandling="greedy"
           disableDefaultUI={true}

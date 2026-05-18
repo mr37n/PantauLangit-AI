@@ -33,9 +33,6 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
-  const [historyFilterStatus, setHistoryFilterStatus] = useState<string>("All");
-  const [historyFilterStartDate, setHistoryFilterStartDate] = useState<string>("");
-  const [historyFilterEndDate, setHistoryFilterEndDate] = useState<string>("");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState<string>("Jakarta Cluster");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -200,34 +197,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [history]);
 
-  // Filtered History Logic
-  const filteredHistory = history.filter(item => {
-    const timestamp = item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime();
-    
-    // Status Filter
-    if (historyFilterStatus !== "All" && item.status !== historyFilterStatus) {
-      return false;
-    }
-    
-    // Start Date Filter
-    if (historyFilterStartDate) {
-      const start = new Date(historyFilterStartDate);
-      start.setHours(0, 0, 0, 0);
-      if (timestamp < start.getTime()) return false;
-    }
-    
-    // End Date Filter
-    if (historyFilterEndDate) {
-      const end = new Date(historyFilterEndDate);
-      end.setHours(23, 59, 59, 999);
-      if (timestamp > end.getTime()) return false;
-    }
-    
-    return true;
-  });
-
-  const historyAqiSum = filteredHistory.reduce((a, b) => a + b.aqi, 0);
-  const historyAqiMean = filteredHistory.length > 0 ? (historyAqiSum / filteredHistory.length).toFixed(0) : "--";
+  const historyAqiSum = history.reduce((a, b) => a + b.aqi, 0);
+  const historyAqiMean = history.length > 0 ? (historyAqiSum / history.length).toFixed(0) : "--";
 
   // Google Maps Auth Failure Detection
   useEffect(() => {
@@ -1216,68 +1187,6 @@ export default function App() {
                       <p className="text-slate-500 text-xs md:text-sm mt-3 max-w-md font-medium leading-relaxed">Analisis mendalam mengenai fluktuasi kualitas udara di sektor Anda berdasarkan rekaman sensor fusion.</p>
                     </div>
 
-                    {/* Filter Controls */}
-                    <div className="flex flex-wrap items-center gap-4 bg-navy-900/40 p-5 rounded-3xl border border-white/5 w-full relative z-20">
-                      <div className="flex flex-col gap-2 min-w-[140px]">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 flex items-center gap-2">
-                           <Sliders className="w-3 h-3" /> Status AQI
-                        </label>
-                        <select 
-                          value={historyFilterStatus}
-                          onChange={(e) => setHistoryFilterStatus(e.target.value)}
-                          className={cn(
-                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all cursor-pointer appearance-none",
-                            theme === 'dark' ? "text-white" : "text-slate-900 bg-white"
-                          )}
-                        >
-                          <option value="All">Semua Status</option>
-                          <option value="Baik">Baik</option>
-                          <option value="Sedang">Sedang</option>
-                          <option value="Buruk">Buruk</option>
-                          <option value="Sangat Buruk">Sangat Buruk</option>
-                          <option value="Berbahaya">Berbahaya</option>
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col gap-2 min-w-[160px]">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Rentang Mulai</label>
-                        <input 
-                          type="date" 
-                          value={historyFilterStartDate}
-                          onChange={(e) => setHistoryFilterStartDate(e.target.value)}
-                          className={cn(
-                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all",
-                            theme === 'dark' ? "text-white" : "text-black bg-white"
-                          )}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-2 min-w-[160px]">
-                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Rentang Selesai</label>
-                        <input 
-                          type="date" 
-                          value={historyFilterEndDate}
-                          onChange={(e) => setHistoryFilterEndDate(e.target.value)}
-                          className={cn(
-                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all",
-                            theme === 'dark' ? "text-white" : "text-black bg-white"
-                          )}
-                        />
-                      </div>
-
-                      <button 
-                        onClick={() => {
-                          setHistoryFilterStatus("All");
-                          setHistoryFilterStartDate("");
-                          setHistoryFilterEndDate("");
-                        }}
-                        className="mt-auto mb-1 p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all border border-red-500/20 group"
-                        title="Reset Filter"
-                      >
-                        <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
-                      </button>
-                    </div>
-
                     <div className="flex items-center gap-2 md:gap-4 bg-navy-900/50 p-1.5 md:p-2 rounded-[2rem] border border-white/5 w-full md:w-auto overflow-x-auto">
                       <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 glass rounded-[1.5rem] text-center border-white/10 min-w-[100px] md:min-w-[120px]">
                         <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Mean AQI</p>
@@ -1287,7 +1196,7 @@ export default function App() {
                       </div>
                       <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 text-center min-w-[100px] md:min-w-[120px]">
                         <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Data Nodes</p>
-                        <p className="text-xl md:text-2xl font-black text-white">{filteredHistory.length}</p>
+                        <p className="text-xl md:text-2xl font-black text-white">{history.length}</p>
                       </div>
                     </div>
                   </div>
@@ -1295,7 +1204,7 @@ export default function App() {
                   {/* Chart */}
                   <div className="h-[400px] w-full mb-12 relative">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={[...filteredHistory].reverse()}>
+                      <AreaChart data={[...history].reverse()}>
                         <defs>
                           <linearGradient id="colorAqi" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
@@ -1358,7 +1267,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {filteredHistory.length > 0 ? filteredHistory.map((log) => (
+                        {history.length > 0 ? history.map((log) => (
                           <tr key={log.id} className={cn(
                             "hover:bg-white/[0.02] transition-colors group",
                             selectedForComparison.includes(log.id) && "bg-blue-500/5"
@@ -1432,19 +1341,19 @@ export default function App() {
                 />
                 
                 {/* Map Overlay Stats & Weather Widget */}
-                <div className="absolute top-10 right-10 z-10 w-72 space-y-4">
-                  <div className="glass-dark border border-white/10 p-6 rounded-[2rem] shadow-2xl">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Pollution Legend</h4>
-                    <div className="space-y-3">
+                <div className="absolute top-4 right-4 z-10 w-36 space-y-2">
+                  <div className="glass-dark border border-white/10 p-2.5 rounded-[1rem] shadow-2xl">
+                    <h4 className="text-[7px] font-black text-slate-500 uppercase tracking-[0.1em] mb-2 px-1">Pollution Legend</h4>
+                    <div className="space-y-1.5">
                       {[
                         { label: "Optimal (0-50)", color: "bg-emerald-500" },
-                        { label: "Modulated (51-100)", color: "bg-yellow-500" },
+                        { label: "Moderate (51-100)", color: "bg-yellow-500" },
                         { label: "Alert (101-150)", color: "bg-orange-500" },
                         { label: "Critical (151+)", color: "bg-rose-600" },
                       ].map(item => (
-                        <div key={item.label} className="flex items-center gap-3">
-                          <div className={cn("w-3 h-3 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.2)]", item.color)}></div>
-                          <span className="text-[10px] text-slate-300 font-black tracking-widest uppercase">{item.label}</span>
+                        <div key={item.label} className="flex items-center gap-2 px-1">
+                          <div className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_4px_rgba(255,255,255,0.2)]", item.color)}></div>
+                          <span className="text-[7px] text-slate-300 font-bold tracking-tight uppercase">{item.label}</span>
                         </div>
                       ))}
                     </div>
@@ -1455,41 +1364,41 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0, x: 20, scale: 0.9 }}
                       animate={{ opacity: 1, x: 0, scale: 1 }}
-                      className="glass-dark border border-emerald-500/20 p-6 rounded-[2rem] shadow-3xl relative overflow-hidden"
+                      className="glass-dark border border-emerald-500/20 p-4 rounded-[1.5rem] shadow-3xl relative overflow-hidden"
                     >
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-[40px] rounded-full"></div>
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                             <Cloud className="w-4 h-4" />
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 blur-[30px] rounded-full"></div>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                             <Cloud className="w-3 h-3" />
                           </div>
                           <div>
-                             <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Weather Matrix</h4>
-                             <p className="text-[10px] font-bold text-white">{analysis.weather.condition}</p>
+                             <h4 className="text-[7px] font-black text-emerald-400 uppercase tracking-widest">Weather Matrix</h4>
+                             <p className="text-[8px] font-bold text-white">{analysis.weather.condition}</p>
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-3 gap-2 py-3 border-y border-white/5">
+                        <div className="grid grid-cols-3 gap-1 py-2 border-y border-white/5">
                            <div className="flex flex-col items-center">
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">TEMP</span>
-                              <span className="text-xs font-black text-white">{analysis.weather.temperature}°</span>
+                              <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">TEMP</span>
+                              <span className="text-[10px] font-black text-white">{analysis.weather.temperature}°</span>
                            </div>
                            <div className="flex flex-col items-center">
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">WIND</span>
-                              <span className="text-xs font-black text-white">{analysis.weather.windSpeed}k {analysis.weather.windDirection}</span>
+                              <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">WIND</span>
+                              <span className="text-[10px] font-black text-white">{analysis.weather.windSpeed}k</span>
                            </div>
                            <div className="flex flex-col items-center">
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">HUM</span>
-                              <span className="text-xs font-black text-white">{analysis.weather.humidity}%</span>
+                              <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">HUM</span>
+                              <span className="text-[10px] font-black text-white">{analysis.weather.humidity}%</span>
                            </div>
                         </div>
 
-                        <div className="flex flex-col gap-1.5 pt-1">
-                          <div className="flex items-center gap-2">
-                             <Wind className="w-3 h-3 text-emerald-400" />
-                             <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Pollution Dispersion</span>
+                        <div className="flex flex-col gap-1 pt-1">
+                          <div className="flex items-center gap-1.5">
+                             <Wind className="w-2.5 h-2.5 text-emerald-400" />
+                             <span className="text-[7px] font-black text-emerald-400 uppercase tracking-widest">Atmosphere</span>
                           </div>
-                          <p className="text-[10px] font-medium text-slate-300 leading-tight italic">
+                          <p className="text-[8px] font-medium text-slate-400 leading-tight italic line-clamp-2">
                              "{analysis.weather.effectOnPollution}"
                           </p>
                         </div>
@@ -1498,9 +1407,9 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="absolute bottom-10 left-10 z-10">
-                   <div className="bg-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] shadow-2xl shadow-blue-500/40 border border-blue-400/30">
-                     Live Distribution Active
+                <div className="absolute bottom-4 left-4 z-10">
+                   <div className="bg-blue-600 px-3 py-1.5 rounded-lg text-[7px] font-black uppercase tracking-[0.3em] shadow-2xl shadow-blue-500/40 border border-blue-400/30">
+                     Live Distribution
                    </div>
                 </div>
               </motion.div>
