@@ -669,17 +669,6 @@ export default function App() {
                           )}
                         </AnimatePresence>
 
-                        {/* Stop Scan Button */}
-                        <div className="absolute top-32 left-1/2 -translate-x-1/2 z-40">
-                          <button 
-                            onClick={stopCamera}
-                            className="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 backdrop-blur-xl px-8 py-3 rounded-2xl font-black transition-all flex items-center gap-3 active:scale-95 group shadow-2xl"
-                          >
-                            <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-                            Hentikan Scan
-                          </button>
-                        </div>
-                        
                         {/* Weather Overlay Panel */}
                         <AnimatePresence>
                           {showWeatherOverlay && weatherData && (
@@ -763,15 +752,23 @@ export default function App() {
                              </div>
                           </div>
                           
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-4">
+                            <button 
+                              onClick={stopCamera}
+                              className="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 backdrop-blur-xl p-5 rounded-3xl transition-all flex items-center justify-center active:scale-95 group shadow-2xl"
+                              title="Hentikan Scan"
+                            >
+                              <Camera className="w-6 h-6 text-red-500" />
+                            </button>
+
                             {recordedVideoUrl ? (
                               <a 
                                 href={recordedVideoUrl} 
                                 download={`PantauLangit_Rec_${new Date().getTime()}.webm`}
-                                className="glass hover:bg-emerald-500/10 text-emerald-400 px-6 h-16 rounded-3xl transition-all border-emerald-500/20 flex items-center gap-3 active:scale-95"
+                                className="glass hover:bg-emerald-500/10 text-emerald-400 p-5 rounded-3xl transition-all border-emerald-500/20 flex items-center justify-center active:scale-95"
+                                title="Download Recording"
                               >
-                                <Download className="w-5 h-5" />
-                                <span className="text-xs font-black uppercase tracking-widest">Download</span>
+                                <Download className="w-6 h-6" />
                               </a>
                             ) : (
                               <button 
@@ -791,18 +788,13 @@ export default function App() {
                             <button 
                               onClick={analyzeFrame}
                               disabled={isAnalyzing}
-                              className="bg-blue-600 hover:bg-blue-500 text-white h-16 px-8 rounded-3xl font-black transition-all shadow-2xl shadow-blue-900/60 flex items-center gap-4 disabled:opacity-50 hover:scale-105 active:scale-95"
+                              className="bg-blue-600 hover:bg-blue-500 text-white p-5 rounded-3xl font-black transition-all shadow-2xl shadow-blue-900/60 flex items-center justify-center disabled:opacity-50 hover:scale-105 active:scale-95"
+                              title="Capture Analysis"
                             >
                               {isAnalyzing ? (
-                                <>
-                                  <RefreshCw className="w-6 h-6 animate-spin" />
-                                  <span>DECIPHERING...</span>
-                                </>
+                                <RefreshCw className="w-6 h-6 animate-spin" />
                               ) : (
-                                <>
-                                  <Camera className="w-6 h-6" />
-                                  <span>CAPTURE ANALYSIS</span>
-                                </>
+                                <Camera className="w-6 h-6" />
                               )}
                             </button>
                           </div>
