@@ -1,6 +1,6 @@
 {
   "name": "PantauLangit AI",
-  "description": "Aplikasi analisis kualitas udara cerdas menggunakan video real-time, data GPS, dan integrasi sensor fusion untuk estimasi AQI yang akurat.",
+  "description": "PantauLangit AI: Sistem cerdas analisis kualitas udara menggunakan Computer Vision dan AI real-time para estimasi AQI akurat.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

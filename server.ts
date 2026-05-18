@@ -64,36 +64,46 @@ app.post("/api/analyze-frame", async (req, res) => {
     }
 
     const prompt = `
-      Anda adalah AI dari PantauLangit AI, sistem mutakhir untuk pemantauan kualitas udara.
-      Tugas Anda adalah menganalisis foto yang diambil dari kamera ponsel ini untuk penilaian kualitas udara dan kondisi lingkungan.
+      Anda adalah core engine AI dari aplikasi PantauLangit AI. Tugas Anda adalah memberikan analisis indeks kualitas udara (AQI) secara detail berdasarkan foto yang diambil dari kamera ponsel dan konteks lokasi.
       
+      Tugas Anda adalah menganalisis foto untuk penilaian kualitas udara dan kondisi lingkungan.
       Lihat pada visibilitas, kabut asap (smog), kekaburan horizon, dan kejernihan objek jauh.
       
       Konteks lokasi fisik: ${JSON.stringify(location)}
       Konteks cuaca real-time (jika tersedia): ${weatherData ? JSON.stringify(weatherData) : "Tidak tersedia (gunakan petunjuk visual dari gambar)"}
       
+      Agar tampilan aplikasi menyerupai visualisasi sebaran polusi ala IQAir tanpa mengubah library peta dasar, wajib sertakan output JSON dengan struktur "visualisasiSekitar".
+      
       Berikan analisis dalam format JSON dengan struktur berikut:
       - visibilityIndex: (0.0 hingga 1.0, di mana 1.0 sangat jernih)
       - estimatedAQI: (estimasi angka AQI, 0-500+)
+      - aqiUtama: (sama dengan estimatedAQI)
       - dominantParticulate: (misal: "PM2.5", "PM10", "NO2")
       - confidence: (persentase keyakinan keseluruhan)
       - description: (analisis teks singkat tentang apa yang Anda lihat di frame terkait kualitas udara)
       - status: (misal: "Baik", "Sedang", "Tidak Sehat", "Berbahaya")
-      - weather: Objek yang berisi estimasi cuaca saat ini dari petunjuk visual dan konteks:
+      - lokasi: (Nama lokasi/cluster yang dianalisis, misal: "Jakarta South Cluster")
+      - rekomendasi: (Saran kesehatan singkat bagi pengguna)
+      - visualisasiSekitar: {
+          "radius_1km": "Deskripsi sebaran polusi radius 1km",
+          "radius_5km": "Deskripsi sebaran polusi radius 5km",
+          "radius_10km": "Deskripsi sebaran polusi radius 10km"
+        }
+      - weather: Objek yang berisi estimasi cuaca saat ini:
           - temperature: (angka estimasi suhu dalam °C)
           - windSpeed: (angka estimasi kecepatan angin dalam km/jam)
-          - windDirection: (estimasi arah angin dalam Bahasa Indonesia, misal: "Utara", "Selatan")
+          - windDirection: (estimasi arah angin dalam Bahasa Indonesia)
           - humidity: (angka estimasi kelembapan dalam %)
           - condition: (Status cuaca: "Cerah", "Berawan", "Hujan", atau "Berkabut")
-          - effectOnPollution: (Analisis mendalam dalam Bahasa Indonesia mengenai dampak cuaca terhadap polusi. Jelaskan bagaimana kecepatan angin (stagnasi vs dispersi), arah angin, suhu (misal: efek inversi), dan kondisi atmosfer secara spesifik memengaruhi kepekatan polusi udara setempat pada saat ini.)
+          - effectOnPollution: (Analisis dampak cuaca terhadap polusi dalam Bahasa Indonesia)
       - pollutants: Array objek untuk PM2.5, PM10, dan Ozone (O3) dengan:
           - name: (misal: "PM2.5")
           - value: (estimasi angka)
           - unit: (misal: "µg/m³" atau "ppb")
-          - confidence: (persentase keyakinan untuk polutan spesifik ini)
-          - visualCues: (array string petunjuk visual, misal: ["Haze abu-abu", "Gedung jauh terlihat buram"])
+          - confidence: (persentase keyakinan)
+          - visualCues: (array string petunjuk visual)
       
-      Kembalikan HANYA JSON yang valid dalam Bahasa Indonesia.
+      ATURAN: Output harus murni JSON tanpa markdown atau teks tambahan.
     `;
 
     const result = await model.generateContent([

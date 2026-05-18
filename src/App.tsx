@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Camera, Map as MapIcon, History, FileText, 
-  AlertTriangle, CheckCircle2, Info, ChevronRight,
+  AlertTriangle, CheckCircle2, Info, ChevronRight, Maximize2,
   Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
   Download, RefreshCw, BarChart3, Settings, Moon, Sun
 } from "lucide-react";
@@ -15,15 +15,18 @@ import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
 import { saveAQIRecord, getHistory, testFirestoreConnection } from "./lib/firebase";
 import { saveLocalAQI, getLocalAQI, clearLocalAQI } from "./lib/storage";
+import { saveHistoryToCache, getHistoryFromCache, saveHistoryRecordToCache } from "./lib/cache";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
 import { HistoryRecord, AnalysisResult } from "./types";
 
 import { PollutionMap } from "./components/PollutionMap";
+import { WeatherForecast } from "./components/WeatherForecast";
 
 // Remove local types as they are now in types.ts
 
 // Maps Configuration
-const MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || "";
+const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
 const hasValidMapsKey = Boolean(MAPS_API_KEY) && MAPS_API_KEY !== "MY_GOOGLE_MAPS_KEY";
 
 export default function App() {
@@ -34,11 +37,13 @@ export default function App() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [deviceLocation, setDeviceLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState<string>("Jakarta Cluster");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [isFocusing, setIsFocusing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [realTimeHistory, setRealTimeHistory] = useState<HistoryRecord[]>([]);
   const [weatherData, setWeatherData] = useState<{
@@ -95,20 +100,47 @@ export default function App() {
     return () => clearInterval(focusInterval);
   }, [activeTab, isCapturing]);
 
+  // Online/Offline Listeners
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Load History
   const loadHistory = useCallback(async () => {
     try {
+      // 1. Try loading from IndexedDB Cache first (FCP improvement)
+      const cachedData = await getHistoryFromCache();
+      if (cachedData.length > 0) {
+        setHistory(cachedData);
+      }
+
+      // 2. Fetch from Firebase
       const firebaseData = await getHistory();
+      
+      // 3. Save new data to cache
+      if (firebaseData.length > 0) {
+        await saveHistoryToCache(firebaseData);
+      }
+
       const localData = getLocalAQI();
       
       // Merge and deduplicate by ID, then sort by timestamp
-      const combined = [...firebaseData, ...localData].sort((a, b) => {
+      const combined = [...firebaseData, ...localData, ...cachedData].sort((a, b) => {
         const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
         const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
         return timeB - timeA;
       });
 
-      // Simple deduplication (prefer Firebase IDs over local if identical, though unlikely here)
+      // Simple deduplication (prefer Firebase IDs over local)
       const seen = new Set();
       const unique = combined.filter(item => {
         if (seen.has(item.id)) return false;
@@ -118,9 +150,24 @@ export default function App() {
 
       setHistory(unique);
     } catch (err) {
-      console.warn("Could not load initial history:", err);
-      // Fallback to just local if Firebase fails
-      setHistory(getLocalAQI());
+      console.warn("Firebase fetch failed, falling back to cache:", err);
+      const cachedData = await getHistoryFromCache();
+      const localData = getLocalAQI();
+      
+      const combined = [...cachedData, ...localData].sort((a, b) => {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+        return timeB - timeA;
+      });
+
+      const seen = new Set();
+      const unique = combined.filter(item => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+
+      setHistory(unique);
     }
   }, []);
 
@@ -222,17 +269,33 @@ export default function App() {
 
   // Location Watcher
   useEffect(() => {
+    let watcherId: number;
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
+      watcherId = navigator.geolocation.watchPosition(
         (pos) => {
           const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setLocation(newPos);
-          fetchWeatherData(newPos.lat, newPos.lng);
-          fetchLocationName(newPos.lat, newPos.lng);
+          setDeviceLocation(newPos);
+          
+          // Initial set for map location if not set
+          setLocation(prev => {
+            if (!prev) {
+              fetchWeatherData(newPos.lat, newPos.lng);
+              fetchLocationName(newPos.lat, newPos.lng);
+              return newPos;
+            }
+            return prev;
+          });
         },
-        () => toast.error("Gagal mendapatkan lokasi")
+        (error) => {
+          console.warn("Geolocation watch error:", error);
+          if (error.code === 1) toast.error("Izin lokasi ditolak");
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     }
+    return () => {
+      if (watcherId !== undefined) navigator.geolocation.clearWatch(watcherId);
+    };
   }, [fetchWeatherData, fetchLocationName]);
 
 
@@ -409,7 +472,8 @@ export default function App() {
       setAnalysis(data);
 
       if (data.estimatedAQI) {
-        const recordData = {
+        const recordData: HistoryRecord = {
+          id: `local-${Date.now()}`,
           aqi: data.estimatedAQI,
           status: data.status,
           visibilityIndex: data.visibilityIndex,
@@ -424,6 +488,9 @@ export default function App() {
         
         // Save to Local Storage (User request)
         saveLocalAQI(recordData);
+
+        // Save to IndexedDB Cache (Offline Feature)
+        await saveHistoryRecordToCache(recordData);
 
         loadHistory();
       }
@@ -472,7 +539,7 @@ export default function App() {
             <p className="text-[13px] text-slate-400 leading-relaxed">
               {mapError 
                 ? "API Key Anda sudah terpasang, namun layanan 'Maps JavaScript API' belum diaktifkan pada project Google Cloud Anda."
-                : "Anda perlu memasukkan GOOGLE_MAPS_PLATFORM_KEY di menu Secrets untuk melihat peta polusi."}
+                : "Anda perlu memasukkan VITE_GOOGLE_MAPS_API_KEY di menu Secrets untuk melihat peta polusi."}
             </p>
           </div>
 
@@ -598,8 +665,15 @@ export default function App() {
                     {activeTab === "analysis" ? "Atmosphere Scan" : activeTab === "history" ? "Data Evolution" : activeTab === "map" ? "Global Reach" : "System Control"}
                   </p>
                 </div>
-                <span className={cn("text-[10px] font-bold tracking-wider mt-1.5 ml-5", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>
-                  SYSTEM READY • {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "AQUIRING GPS..."}
+                <span className={cn("text-[10px] font-bold tracking-wider mt-1.5 ml-5 flex items-center gap-2", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>
+                  {isOffline ? (
+                    <span className="flex items-center gap-1.5 text-amber-500">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      OFFLINE MODE
+                    </span>
+                  ) : (
+                    "SYSTEM READY"
+                  )} • {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "AQUIRING GPS..."}
                 </span>
              </div>
           </div>
@@ -886,57 +960,105 @@ export default function App() {
                                       <span className="text-sm font-black text-white">{analysis.dominantParticulate}</span>
                                    </div>
                                 </div>
+
+                                {analysis.rekomendasi && (
+                                  <div className="mt-8 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                     <div className="flex items-center gap-2 mb-2">
+                                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                        <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Rekomendasi AI</span>
+                                     </div>
+                                     <p className="text-xs font-bold text-white leading-relaxed italic">
+                                        "{analysis.rekomendasi}"
+                                     </p>
+                                  </div>
+                                )}
                              </div>
                           </div>
                         </div>
 
+                        {/* Visualisasi Sekitar - IQAir Style */}
+                        {analysis.visualisasiSekitar && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[
+                              { label: "Radius 1KM", value: analysis.visualisasiSekitar.radius_1km, icon: <Maximize2 className="w-4 h-4" /> },
+                              { label: "Radius 5KM", value: analysis.visualisasiSekitar.radius_5km, icon: <Maximize2 className="w-4 h-4" /> },
+                              { label: "Radius 10KM", value: analysis.visualisasiSekitar.radius_10km, icon: <Maximize2 className="w-4 h-4" /> }
+                            ].map((v, i) => (
+                              <motion.div 
+                                key={i}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: i * 0.1 }}
+                                className="glass-dark border border-white/5 p-5 rounded-3xl"
+                              >
+                                <div className="flex items-center gap-3 mb-3">
+                                   <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                                      {v.icon}
+                                   </div>
+                                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{v.label}</span>
+                                </div>
+                                <p className="text-xs font-black text-white leading-tight">
+                                   {v.value}
+                                </p>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+
                         {/* Detailed Breakdown Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {analysis.pollutants && analysis.pollutants.map((p, idx) => (
-                            <motion.div 
-                              key={p.name}
-                              initial={{ opacity: 0, scale: 0.9 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: idx * 0.1 }}
-                              className="glass-dark border border-white/5 p-5 rounded-3xl relative group overflow-hidden"
-                            >
-                              {/* Visual Cue Overlay */}
-                              <div className="absolute -right-2 -top-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <Cpu className="w-16 h-16" />
-                              </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                          {/* Weather Forecast Card (New Component) */}
+                          {analysis.weather && (
+                            <WeatherForecast weather={analysis.weather} className="lg:col-span-1" />
+                          )}
 
-                              <div className="flex justify-between items-start mb-4">
-                                <div>
-                                  <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{p.name}</h4>
-                                  <div className="flex items-baseline gap-1 mt-1">
-                                    <span className="text-xl font-black text-white">{p.value}</span>
-                                    <span className="text-[8px] font-bold text-slate-500">{p.unit}</span>
+                          <div className="md:col-span-2 lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {analysis.pollutants && analysis.pollutants.map((p, idx) => (
+                              <motion.div 
+                                key={p.name}
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: idx * 0.1 }}
+                                className="glass-dark border border-white/5 p-5 rounded-3xl relative group overflow-hidden h-full"
+                              >
+                                {/* Visual Cue Overlay */}
+                                <div className="absolute -right-2 -top-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                                  <Cpu className="w-16 h-16" />
+                                </div>
+
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{p.name}</h4>
+                                    <div className="flex items-baseline gap-1 mt-1">
+                                      <span className="text-xl font-black text-white">{p.value}</span>
+                                      <span className="text-[8px] font-bold text-slate-500">{p.unit}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-[8px] font-black text-slate-500 uppercase">Confidence</span>
+                                    <span className="text-[10px] font-black text-emerald-400">{p.confidence}%</span>
                                   </div>
                                 </div>
-                                <div className="flex flex-col items-end">
-                                  <span className="text-[8px] font-black text-slate-500 uppercase">Confidence</span>
-                                  <span className="text-[10px] font-black text-emerald-400">{p.confidence}%</span>
+
+                                <div className="space-y-1.5">
+                                  {p.visualCues && p.visualCues.map((cue, cIdx) => (
+                                    <div key={cIdx} className="flex items-center gap-2">
+                                      <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+                                      <span className="text-[9px] font-medium text-slate-400 italic">"{cue}"</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              </div>
 
-                              <div className="space-y-1.5">
-                                {p.visualCues && p.visualCues.map((cue, cIdx) => (
-                                  <div key={cIdx} className="flex items-center gap-2">
-                                    <div className="w-1 h-1 rounded-full bg-blue-500/50" />
-                                    <span className="text-[9px] font-medium text-slate-400 italic">"{cue}"</span>
-                                  </div>
-                                ))}
-                              </div>
-
-                              <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                <motion.div 
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${p.confidence}%` }}
-                                  className="h-full bg-blue-500/40"
-                                />
-                              </div>
-                            </motion.div>
-                          ))}
+                                <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${p.confidence}%` }}
+                                    className="h-full bg-blue-500/40"
+                                  />
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
                         </div>
                       </motion.div>
                     )}
@@ -961,7 +1083,7 @@ export default function App() {
                         <div className="flex justify-between items-center mb-8">
                           <div className="flex flex-col">
                             <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Estimated AQI</span>
-                            <span className="text-xs font-bold opacity-80">Local Atmosphere Monitoring</span>
+                            <span className="text-xs font-bold opacity-80">{analysis?.lokasi || "Local Atmosphere Monitoring"}</span>
                           </div>
                           {analysis && (
                             <div className="px-4 py-1.5 glass rounded-full text-[10px] font-black uppercase tracking-widest border-white/20">
@@ -1185,6 +1307,17 @@ export default function App() {
                       </div>
                       <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter">Evolution Metrics</h2>
                       <p className="text-slate-500 text-xs md:text-sm mt-3 max-w-md font-medium leading-relaxed">Analisis mendalam mengenai fluktuasi kualitas udara di sektor Anda berdasarkan rekaman sensor fusion.</p>
+                      
+                      {isOffline && (
+                        <div className="mt-4 flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl animate-pulse">
+                          <div className="p-1.5 bg-amber-500/20 rounded-lg">
+                            <Info className="w-3.5 h-3.5 text-amber-500" />
+                          </div>
+                          <p className="text-[10px] md:text-xs font-bold text-amber-200">
+                             Viewing cached data while offline. New recordings will be saved locally.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-4 bg-navy-900/50 p-1.5 md:p-2 rounded-[2rem] border border-white/5 w-full md:w-auto overflow-x-auto">
@@ -1329,7 +1462,9 @@ export default function App() {
                 
                 <PollutionMap 
                   apiKey={MAPS_API_KEY} 
-                  userLocation={location} 
+                  mapId={MAPS_MAP_ID}
+                  userLocation={deviceLocation} 
+                  targetLocation={location}
                   historyData={history}
                   weatherData={weatherData}
                   analysisData={analysis}
@@ -1337,6 +1472,13 @@ export default function App() {
                     setLocation(newLoc);
                     fetchWeatherData(newLoc.lat, newLoc.lng);
                     fetchLocationName(newLoc.lat, newLoc.lng);
+                  }}
+                  onRecenter={() => {
+                    if (deviceLocation) {
+                      setLocation(deviceLocation);
+                      fetchWeatherData(deviceLocation.lat, deviceLocation.lng);
+                      fetchLocationName(deviceLocation.lat, deviceLocation.lng);
+                    }
                   }}
                 />
                 
