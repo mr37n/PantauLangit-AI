@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, Auth } from 'firebase/auth';
 import { 
   initializeFirestore, 
   collection, 
@@ -11,21 +11,27 @@ import {
   serverTimestamp, 
   Timestamp,
   doc,
-  getDocFromServer 
+  getDocFromServer,
+  Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { HistoryRecord } from '../types';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = initializeFirestore(app, {
+const isConfigValid = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+const app = isConfigValid ? initializeApp(firebaseConfig) : null;
+export const auth = app ? getAuth(app) : (null as unknown as Auth);
+
+export const db: Firestore | null = app ? initializeFirestore(app, {
   experimentalForceLongPolling: true,
   ignoreUndefinedProperties: true,
-  host: "firestore.googleapis.com",
-  ssl: true,
-}, firebaseConfig.firestoreDatabaseId);
+}, firebaseConfig.firestoreDatabaseId) : null;
 
 export async function testFirestoreConnection() {
+  if (!db) {
+    console.warn("Firestore not initialized: Missing or invalid config");
+    return false;
+  }
   try {
     await getDocFromServer(doc(db, 'system', 'connection_test'));
     console.log("Firestore connection test: Success");
@@ -67,6 +73,10 @@ export const saveAQIRecord = async (record: Partial<HistoryRecord> & {
   location: { lat: number; lng: number };
   address: string;
 }) => {
+  if (!db) {
+    console.warn("Skipping Firestore save: DB not initialized");
+    return;
+  }
   const path = 'air_quality_history';
   try {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -81,6 +91,10 @@ export const saveAQIRecord = async (record: Partial<HistoryRecord> & {
 };
 
 export const getHistory = async (count = 20): Promise<HistoryRecord[]> => {
+  if (!db) {
+    console.warn("Skipping Firestore fetch: DB not initialized");
+    return [];
+  }
   const path = 'air_quality_history';
   try {
     const q = query(

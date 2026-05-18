@@ -489,20 +489,30 @@ export default function App() {
           timestamp: new Date()
         };
 
-        // Save to Firebase
-        await saveAQIRecord(recordData);
+        // Save to Firebase (Optional, don't fail the whole flow if it fails)
+        try {
+          await saveAQIRecord(recordData);
+        } catch (firebaseErr) {
+          console.warn("Firestore save failed but continuing:", firebaseErr);
+          toast("Gagal menyimpan ke riwayat cloud, menggunakan mode lokal.", { icon: "ℹ️" });
+        }
         
-        // Save to Local Storage (User request)
+        // Save to Local Storage
         saveLocalAQI(recordData);
 
         // Save to IndexedDB Cache (Offline Feature)
-        await saveHistoryRecordToCache(recordData);
+        try {
+          await saveHistoryRecordToCache(recordData);
+        } catch (cacheErr) {
+          console.warn("Cache save failed:", cacheErr);
+        }
 
         loadHistory();
       }
     } catch (err) {
       console.error("Analysis Error:", err);
-      toast.error("Gagal menganalisis gambar");
+      const errorMessage = err instanceof Error ? err.message : "Gagal menganalisis gambar";
+      toast.error(`Analisis Gagal: ${errorMessage}`);
     } finally {
       setIsAnalyzing(false);
     }
