@@ -20,6 +20,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  ignoreUndefinedProperties: true,
+  host: "firestore.googleapis.com",
+  ssl: true,
 }, firebaseConfig.firestoreDatabaseId);
 
 export async function testFirestoreConnection() {

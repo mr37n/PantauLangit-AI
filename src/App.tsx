@@ -34,6 +34,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationName, setLocationName] = useState<string>("Jakarta Cluster");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [isFocusing, setIsFocusing] = useState(false);
@@ -123,6 +124,37 @@ export default function App() {
     }
   }, []);
 
+  const fetchLocationName = useCallback(async (lat: number, lng: number) => {
+    try {
+      // Try Google Maps Geocoding if key is valid
+      if (hasValidMapsKey) {
+        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${MAPS_API_KEY}`);
+        const data = await res.json();
+        if (data.results && data.results[0]) {
+          // Extract a shorter name (e.g., city or neighborhood)
+          const cityComponent = data.results[0].address_components.find((c: { types: string[] }) => 
+            c.types.includes("locality") || c.types.includes("administrative_area_level_2")
+          );
+          setLocationName(cityComponent?.long_name || "Detected Sector");
+          return;
+        }
+      }
+      
+      // Fallback to OpenStreetMap/Nominatim (Free, no key required)
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
+      const data = await res.json();
+      if (data.display_name) {
+        const parts = data.display_name.split(',');
+        setLocationName(parts[0] + " Cluster");
+      } else {
+        setLocationName("Sector Alpha");
+      }
+    } catch (err) {
+      console.warn("Geocoding failed:", err);
+      setLocationName("Unknown Cluster");
+    }
+  }, []);
+
   const fetchWeatherData = useCallback(async (lat: number, lng: number) => {
     try {
       const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`);
@@ -193,11 +225,12 @@ export default function App() {
           const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(newPos);
           fetchWeatherData(newPos.lat, newPos.lng);
+          fetchLocationName(newPos.lat, newPos.lng);
         },
         () => toast.error("Gagal mendapatkan lokasi")
       );
     }
-  }, [fetchWeatherData]);
+  }, [fetchWeatherData, fetchLocationName]);
 
 
   // Notification logic for Poor AQI
@@ -749,14 +782,14 @@ export default function App() {
                           <div className="space-y-2 text-center sm:text-left">
                              <div className="flex items-center justify-center sm:justify-start gap-2">
                                 <div className="h-0.5 w-8 bg-blue-500"></div>
-                                <p className="text-[10px] text-blue-400 uppercase tracking-[0.3em] font-black">Spatial Core</p>
+                                <p className="text-[9px] text-blue-400 uppercase tracking-[0.3em] font-black">Spatial Core</p>
                              </div>
-                             <h2 className="text-3xl font-black text-white tracking-tighter">
-                               {location ? "Jakarta Cluster" : "Grid Aquiring"}
+                             <h2 className="text-xl font-black text-white tracking-tighter">
+                               {location ? locationName : "Grid Aquiring"}
                              </h2>
                              <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-400">
-                                <Navigation className="w-3 h-3" />
-                                <span className="text-[10px] font-bold tracking-widest uppercase">Sector: {location?.lat.toFixed(2)}N / {location?.lng.toFixed(2)}E</span>
+                                <Navigation className="w-2.5 h-2.5" />
+                                <span className="text-[9px] font-bold tracking-widest uppercase">Sector: {location?.lat.toFixed(2)}N / {location?.lng.toFixed(2)}E</span>
                              </div>
                           </div>
                           
@@ -1298,6 +1331,11 @@ export default function App() {
                   apiKey={MAPS_API_KEY} 
                   userLocation={location} 
                   historyData={history}
+                  onLocationChange={(newLoc) => {
+                    setLocation(newLoc);
+                    fetchWeatherData(newLoc.lat, newLoc.lng);
+                    fetchLocationName(newLoc.lat, newLoc.lng);
+                  }}
                 />
                 
                 {/* Map Overlay Stats & Weather Widget */}

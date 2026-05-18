@@ -119,7 +119,8 @@ export const PollutionMap: React.FC<{
   apiKey: string;
   userLocation: { lat: number; lng: number } | null;
   historyData?: HistoryRecord[];
-}> = ({ apiKey, userLocation, historyData = [] }) => {
+  onLocationChange?: (location: { lat: number; lng: number }) => void;
+}> = ({ apiKey, userLocation, historyData = [], onLocationChange }) => {
   const center = useMemo(() => userLocation || { lat: -6.2, lng: 106.8166 }, [userLocation]);
 
   // Combine mock data with real history for better visualization
@@ -146,6 +147,11 @@ export const PollutionMap: React.FC<{
           disableDefaultUI={true}
           styles={DARK_MAP_STYLES}
           className="w-full h-full rounded-[2.5rem]"
+          onCenterChanged={(ev) => {
+            if (onLocationChange && ev.detail.center) {
+              onLocationChange(ev.detail.center);
+            }
+          }}
         >
           {/* USER LOCATION MARKER WITH RADAR PULSE */}
           {userLocation && (
