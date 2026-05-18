@@ -4,9 +4,23 @@ import {
   Map, 
   AdvancedMarker
 } from '@vis.gl/react-google-maps';
-import { Wind, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
+import { Wind, AlertTriangle, Info, CheckCircle2, Cloud, Sun, CloudRain, CloudLightning, Droplets } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { HistoryRecord } from '../types';
+
+interface WeatherData {
+  temp: string | number;
+  humidity: string | number;
+  wind: string | number;
+  uv: string | number;
+  condition: string;
+}
+
+interface AnalysisData {
+  airQuality: string;
+  composition: { name: string; value: string; }[];
+  recommendation?: string;
+}
 
 // --- MAP STYLING (DARK MODE FUTURISTIK) ---
 const DARK_MAP_STYLES = [
@@ -119,8 +133,10 @@ export const PollutionMap: React.FC<{
   apiKey: string;
   userLocation: { lat: number; lng: number } | null;
   historyData?: HistoryRecord[];
+  weatherData?: WeatherData | null;
+  analysisData?: AnalysisData | null;
   onLocationChange?: (location: { lat: number; lng: number }) => void;
-}> = ({ apiKey, userLocation, historyData = [], onLocationChange }) => {
+}> = ({ apiKey, userLocation, historyData = [], weatherData, analysisData, onLocationChange }) => {
   const center = useMemo(() => userLocation || { lat: -6.2, lng: 106.8166 }, [userLocation]);
 
   // Combine mock data with real history for better visualization
@@ -164,6 +180,13 @@ export const PollutionMap: React.FC<{
             </AdvancedMarker>
           )}
 
+          {/* WEATHER FORECAST MARKER */}
+          {userLocation && weatherData && (
+            <AdvancedMarker position={{ lat: userLocation.lat + 0.015, lng: userLocation.lng + 0.015 }}>
+               <WeatherMarker weather={weatherData} />
+            </AdvancedMarker>
+          )}
+
           {/* POLLUTION MARKERS */}
           {allMarkers.map((marker) => (
             <AdvancedMarker 
@@ -174,6 +197,38 @@ export const PollutionMap: React.FC<{
             </AdvancedMarker>
           ))}
         </Map>
+        
+        {/* AI POLLUTION STATUS OVERLAY */}
+        {analysisData && (
+          <div className="absolute bottom-10 left-10 z-10 glass-dark border border-white/10 p-5 rounded-[2rem] shadow-2xl max-w-xs overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-1000">
+             <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                   <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                      <Wind className="w-4 h-4" />
+                   </div>
+                   <div>
+                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Scanning Result</p>
+                      <h4 className="text-xs font-black text-white mt-1">Air Integrity: {analysisData.airQuality}</h4>
+                   </div>
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                   {analysisData.composition.slice(0, 3).map((comp, i) => (
+                     <div key={i} className="px-2 py-1 bg-white/5 rounded-lg border border-white/5 flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400">{comp.name}:</span>
+                        <span className="text-[10px] font-black text-white">{comp.value}</span>
+                     </div>
+                   ))}
+                </div>
+                
+                {analysisData.recommendation && (
+                  <p className="text-[9px] text-slate-400 font-medium leading-relaxed italic border-t border-white/5 pt-2">
+                    "{analysisData.recommendation}"
+                  </p>
+                )}
+             </div>
+          </div>
+        )}
       </APIProvider>
     </div>
   );
@@ -255,6 +310,55 @@ const AqiMarker: React.FC<{ aqi: number; label: string }> = ({ aqi, label }) => 
           </div>
           {/* Tooltip Arrow */}
           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-navy-950 border-r border-b border-white/10 rotate-45" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- WEATHER MARKER COMPONENT ---
+const WeatherMarker: React.FC<{ weather: WeatherData }> = ({ weather }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  const WeatherIcon = useMemo(() => {
+    const cond = weather.condition?.toLowerCase() || '';
+    if (cond.includes('clear') || cond.includes('sun')) return Sun;
+    if (cond.includes('rain') || cond.includes('drizzle')) return CloudRain;
+    if (cond.includes('thunder')) return CloudLightning;
+    return Cloud;
+  }, [weather.condition]);
+
+  return (
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative flex items-center justify-center w-10 h-10 glass-dark rounded-2xl border border-white/20 transition-all hover:scale-110 cursor-pointer shadow-2xl overflow-visible"
+    >
+      <WeatherIcon className="w-5 h-5 text-blue-400" />
+      
+      <div className={cn(
+        "absolute top-full left-1/2 -translate-x-1/2 mt-3 pointer-events-none transition-all duration-300 z-50",
+        isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+      )}>
+        <div className="glass-dark border border-white/10 p-3 rounded-2xl shadow-3xl min-w-[140px] backdrop-blur-xl">
+           <div className="flex flex-col gap-2">
+              <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest text-center">Local Forecast</span>
+              <div className="flex items-center justify-center gap-2">
+                 <WeatherIcon className="w-4 h-4 text-white" />
+                 <span className="text-xs font-black text-white leading-none">{weather.temp}°C</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-white/5 pt-2">
+                 <div className="flex flex-col items-center">
+                    <Droplets className="w-2.5 h-2.5 text-blue-400 mb-0.5" />
+                    <span className="text-[8px] font-bold text-slate-300">{weather.humidity}%</span>
+                 </div>
+                 <div className="flex flex-col items-center">
+                    <Wind className="w-2.5 h-2.5 text-emerald-400 mb-0.5" />
+                    <span className="text-[8px] font-bold text-slate-300">{weather.wind}k</span>
+                 </div>
+              </div>
+           </div>
+           <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-navy-950 border-l border-t border-white/10 rotate-45" />
         </div>
       </div>
     </div>

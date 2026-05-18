@@ -33,6 +33,9 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [historyFilterStatus, setHistoryFilterStatus] = useState<string>("All");
+  const [historyFilterStartDate, setHistoryFilterStartDate] = useState<string>("");
+  const [historyFilterEndDate, setHistoryFilterEndDate] = useState<string>("");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState<string>("Jakarta Cluster");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -196,6 +199,35 @@ export default function App() {
     const interval = setInterval(updateRealTimeData, 10000); // Update every 10s
     return () => clearInterval(interval);
   }, [history]);
+
+  // Filtered History Logic
+  const filteredHistory = history.filter(item => {
+    const timestamp = item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime();
+    
+    // Status Filter
+    if (historyFilterStatus !== "All" && item.status !== historyFilterStatus) {
+      return false;
+    }
+    
+    // Start Date Filter
+    if (historyFilterStartDate) {
+      const start = new Date(historyFilterStartDate);
+      start.setHours(0, 0, 0, 0);
+      if (timestamp < start.getTime()) return false;
+    }
+    
+    // End Date Filter
+    if (historyFilterEndDate) {
+      const end = new Date(historyFilterEndDate);
+      end.setHours(23, 59, 59, 999);
+      if (timestamp > end.getTime()) return false;
+    }
+    
+    return true;
+  });
+
+  const historyAqiSum = filteredHistory.reduce((a, b) => a + b.aqi, 0);
+  const historyAqiMean = filteredHistory.length > 0 ? (historyAqiSum / filteredHistory.length).toFixed(0) : "--";
 
   // Google Maps Auth Failure Detection
   useEffect(() => {
@@ -1183,16 +1215,79 @@ export default function App() {
                       <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter">Evolution Metrics</h2>
                       <p className="text-slate-500 text-xs md:text-sm mt-3 max-w-md font-medium leading-relaxed">Analisis mendalam mengenai fluktuasi kualitas udara di sektor Anda berdasarkan rekaman sensor fusion.</p>
                     </div>
+
+                    {/* Filter Controls */}
+                    <div className="flex flex-wrap items-center gap-4 bg-navy-900/40 p-5 rounded-3xl border border-white/5 w-full relative z-20">
+                      <div className="flex flex-col gap-2 min-w-[140px]">
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 flex items-center gap-2">
+                           <Sliders className="w-3 h-3" /> Status AQI
+                        </label>
+                        <select 
+                          value={historyFilterStatus}
+                          onChange={(e) => setHistoryFilterStatus(e.target.value)}
+                          className={cn(
+                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all cursor-pointer appearance-none",
+                            theme === 'dark' ? "text-white" : "text-slate-900 bg-white"
+                          )}
+                        >
+                          <option value="All">Semua Status</option>
+                          <option value="Baik">Baik</option>
+                          <option value="Sedang">Sedang</option>
+                          <option value="Buruk">Buruk</option>
+                          <option value="Sangat Buruk">Sangat Buruk</option>
+                          <option value="Berbahaya">Berbahaya</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-2 min-w-[160px]">
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Rentang Mulai</label>
+                        <input 
+                          type="date" 
+                          value={historyFilterStartDate}
+                          onChange={(e) => setHistoryFilterStartDate(e.target.value)}
+                          className={cn(
+                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all",
+                            theme === 'dark' ? "text-white" : "text-black bg-white"
+                          )}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-2 min-w-[160px]">
+                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2">Rentang Selesai</label>
+                        <input 
+                          type="date" 
+                          value={historyFilterEndDate}
+                          onChange={(e) => setHistoryFilterEndDate(e.target.value)}
+                          className={cn(
+                            "bg-navy-950/80 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold text-white outline-none focus:border-blue-500/50 transition-all",
+                            theme === 'dark' ? "text-white" : "text-black bg-white"
+                          )}
+                        />
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          setHistoryFilterStatus("All");
+                          setHistoryFilterStartDate("");
+                          setHistoryFilterEndDate("");
+                        }}
+                        className="mt-auto mb-1 p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all border border-red-500/20 group"
+                        title="Reset Filter"
+                      >
+                        <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
+                      </button>
+                    </div>
+
                     <div className="flex items-center gap-2 md:gap-4 bg-navy-900/50 p-1.5 md:p-2 rounded-[2rem] border border-white/5 w-full md:w-auto overflow-x-auto">
                       <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 glass rounded-[1.5rem] text-center border-white/10 min-w-[100px] md:min-w-[120px]">
                         <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Mean AQI</p>
                         <p className="text-xl md:text-2xl font-black text-blue-400">
-                          {history.length > 0 ? (history.reduce((a, b) => a + b.aqi, 0) / history.length).toFixed(0) : "--"}
+                          {historyAqiMean}
                         </p>
                       </div>
                       <div className="flex-1 md:flex-none px-4 md:px-10 py-3 md:py-4 text-center min-w-[100px] md:min-w-[120px]">
                         <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Data Nodes</p>
-                        <p className="text-xl md:text-2xl font-black text-white">{history.length}</p>
+                        <p className="text-xl md:text-2xl font-black text-white">{filteredHistory.length}</p>
                       </div>
                     </div>
                   </div>
@@ -1200,7 +1295,7 @@ export default function App() {
                   {/* Chart */}
                   <div className="h-[400px] w-full mb-12 relative">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={[...history].reverse()}>
+                      <AreaChart data={[...filteredHistory].reverse()}>
                         <defs>
                           <linearGradient id="colorAqi" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
@@ -1263,7 +1358,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {history.length > 0 ? history.map((log) => (
+                        {filteredHistory.length > 0 ? filteredHistory.map((log) => (
                           <tr key={log.id} className={cn(
                             "hover:bg-white/[0.02] transition-colors group",
                             selectedForComparison.includes(log.id) && "bg-blue-500/5"
@@ -1327,6 +1422,8 @@ export default function App() {
                   apiKey={MAPS_API_KEY} 
                   userLocation={location} 
                   historyData={history}
+                  weatherData={weatherData}
+                  analysisData={analysis}
                   onLocationChange={(newLoc) => {
                     setLocation(newLoc);
                     fetchWeatherData(newLoc.lat, newLoc.lng);
