@@ -676,43 +676,47 @@ export default function App() {
                               initial={{ opacity: 0, x: 20 }}
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: 20 }}
-                              className="absolute top-8 right-8 z-30 group"
+                              className="absolute top-1/4 right-6 z-30 group"
                             >
-                              <div className="glass-dark border-white/10 p-4 rounded-3xl shadow-2xl relative overflow-hidden backdrop-blur-2xl">
+                              <div className="glass-dark border-white/10 p-5 rounded-[2rem] shadow-2xl relative overflow-hidden backdrop-blur-2xl w-32">
                                 <button 
                                   onClick={() => setShowWeatherOverlay(false)}
-                                  className="absolute top-2 right-2 p-1 text-slate-500 hover:text-white transition-colors"
+                                  className="absolute top-3 right-3 p-1 text-slate-500 hover:text-white transition-colors"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
                                 
-                                <div className="flex flex-col gap-3">
-                                  <div className="flex items-center gap-3 border-b border-white/5 pb-2">
+                                <div className="flex flex-col gap-4">
+                                  <div className="flex flex-col items-center text-center gap-2 border-b border-white/5 pb-3">
                                      <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
                                         <Cloud className="w-4 h-4" />
                                      </div>
                                      <div>
-                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none">External Conditions</p>
-                                        <h4 className="text-sm font-black text-white mt-0.5">{weatherData.condition}</h4>
+                                        <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest leading-none">Status</p>
+                                        <h4 className="text-[10px] font-black text-white mt-1">{weatherData.condition}</h4>
                                      </div>
                                   </div>
                                   
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                    <div className="flex items-center gap-2">
+                                  <div className="flex flex-col gap-4">
+                                    <div className="flex flex-col items-center gap-1">
                                       <Thermometer className="w-3 h-3 text-red-400" />
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">TEMP: <span className="text-white">{weatherData.temp}°C</span></span>
+                                      <span className="text-[10px] text-white font-black">{weatherData.temp}°C</span>
+                                      <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">SUHU</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-col items-center gap-1">
                                       <Droplets className="w-3 h-3 text-blue-400" />
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">HUMID: <span className="text-white">{weatherData.humidity}%</span></span>
+                                      <span className="text-[10px] text-white font-black">{weatherData.humidity}%</span>
+                                      <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">LEMBAP</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-col items-center gap-1">
                                       <Wind className="w-3 h-3 text-emerald-400" />
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">WIND: <span className="text-white">{weatherData.wind}km/h</span></span>
+                                      <span className="text-[10px] text-white font-black">{weatherData.wind}k/h</span>
+                                      <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">ANGIN</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-col items-center gap-1">
                                       <RefreshCw className="w-3 h-3 text-amber-400" />
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">UV: <span className="text-white font-black">{weatherData.uv}</span></span>
+                                      <span className="text-[10px] text-white font-black">{weatherData.uv}</span>
+                                      <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter">UV INDX</span>
                                     </div>
                                   </div>
                                 </div>
