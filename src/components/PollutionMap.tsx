@@ -162,9 +162,9 @@ export const PollutionMap: React.FC<{
           {allMarkers.map((marker) => (
             <AdvancedMarker 
               key={marker.id} 
-              position={{ lat: marker.lat, lng: marker.lng }}
+              position={{ lat: marker.lat!, lng: marker.lng! }}
             >
-              <AqiMarker aqi={marker.aqi} />
+              <AqiMarker aqi={marker.aqi} label={marker.label} />
             </AdvancedMarker>
           ))}
         </Map>
@@ -174,46 +174,82 @@ export const PollutionMap: React.FC<{
 };
 
 // --- MARKER KOMPONEN DENGAN LOGIKA WARNA SAKTI ---
-const AqiMarker: React.FC<{ aqi: number }> = ({ aqi }) => {
+const AqiMarker: React.FC<{ aqi: number; label: string }> = ({ aqi, label }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   const config = useMemo(() => {
     if (aqi <= 50) return {
       color: 'bg-emerald-500',
       glow: 'shadow-[0_0_12px_rgba(16,185,129,0.5)]',
       icon: CheckCircle2,
-      border: 'border-emerald-400/50'
+      border: 'border-emerald-400/50',
+      status: 'Bagus'
     };
     if (aqi <= 100) return {
       color: 'bg-amber-500',
       glow: 'shadow-[0_0_12px_rgba(234,179,8,0.5)]',
       icon: Info,
-      border: 'border-amber-400/50'
+      border: 'border-amber-400/50',
+      status: 'Moderat'
     };
     if (aqi <= 150) return {
       color: 'bg-orange-500',
       glow: 'shadow-[0_0_12px_rgba(249,115,22,0.5)]',
       icon: AlertTriangle,
-      border: 'border-orange-400/50'
+      border: 'border-orange-400/50',
+      status: 'Tidak Sehat'
     };
     return {
       color: 'bg-rose-600',
       glow: 'shadow-[0_0_20px_rgba(225,29,72,0.8)]',
       icon: Wind,
-      border: 'border-rose-400/50'
+      border: 'border-rose-400/50',
+      status: 'Berbahaya'
     };
   }, [aqi]);
 
   const Icon = config.icon;
 
   return (
-    <div className={cn(
-      "flex items-center justify-center p-1.5 rounded-full border transition-all hover:scale-125 cursor-pointer shadow-xl",
-      config.color,
-      config.glow,
-      config.border
-    )}>
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "relative flex items-center justify-center p-1.5 rounded-full border transition-all hover:scale-125 cursor-pointer shadow-xl",
+        config.color,
+        config.glow,
+        config.border
+      )}
+    >
       <Icon className="w-3.5 h-3.5 text-white" />
-      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-navy-950 px-2 py-0.5 rounded-md text-[8px] font-black text-white border border-white/10">
-        AQI: {aqi}
+      
+      {/* FUTURISTIC TOOLTIP */}
+      <div className={cn(
+        "absolute bottom-full left-1/2 -translate-x-1/2 mb-3 pointer-events-none transition-all duration-300",
+        isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+      )}>
+        <div className="glass-dark border border-white/10 p-2.5 rounded-xl shadow-2xl min-w-[120px] backdrop-blur-md">
+          <div className="flex flex-col gap-1">
+            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{label}</span>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-lg font-black text-white leading-none">{aqi}</span>
+              <div className={cn(
+                "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tighter text-white",
+                config.color
+              )}>
+                {config.status}
+              </div>
+            </div>
+            <div className="w-full h-[2px] bg-white/5 rounded-full mt-1 overflow-hidden">
+               <div 
+                 className={cn("h-full transition-all duration-1000", config.color)} 
+                 style={{ width: `${Math.min((aqi / 300) * 100, 100)}%` }}
+               />
+            </div>
+          </div>
+          {/* Tooltip Arrow */}
+          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-navy-950 border-r border-b border-white/10 rotate-45" />
+        </div>
       </div>
     </div>
   );

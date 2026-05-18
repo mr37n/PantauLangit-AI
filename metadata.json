@@ -1,5 +1,5 @@
 {
-  "name": "Cakrawala AI",
+  "name": "PantauLangit AI",
   "description": "Aplikasi analisis kualitas udara cerdas menggunakan video real-time, data GPS, dan integrasi sensor fusion untuk estimasi AQI yang akurat.",
   "requestFramePermissions": [
     "camera",

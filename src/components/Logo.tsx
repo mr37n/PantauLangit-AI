@@ -9,59 +9,73 @@ export const Logo = ({ className }: { className?: string }) => {
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Cityscape Left - Red */}
+      <defs>
+        <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="redGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      {/* Outer Cyan Border */}
+      <rect 
+        x="6" y="6" width="88" height="88" rx="14" 
+        stroke="#22D3EE" strokeWidth="2.5" strokeOpacity="0.6" 
+        filter="url(#cyanGlow)"
+      />
+
+      {/* Viewfinder Corners - Cyan */}
+      <path d="M18 38 V22 Q18 18 22 18 H38" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" filter="url(#cyanGlow)" />
+      <path d="M62 18 H78 Q82 18 82 22 V38" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" filter="url(#cyanGlow)" />
+      <path d="M82 62 V78 Q82 82 78 82 H62" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" filter="url(#cyanGlow)" />
+      <path d="M38 82 H22 Q18 82 18 78 V62" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" filter="url(#cyanGlow)" />
+
+      {/* Red Baseline */}
+      <line x1="10" y1="63.5" x2="90" y2="63.5" stroke="#F43F5E" strokeWidth="2" filter="url(#redGlow)" />
+
+      {/* Left Cityscape - Red */}
       <path 
-        d="M11 62.5 V54.5 H18 V50 H24 V60 L26 44 L31 32 V54.5 H35 V42.5 L39 40 V50 H43 V62.5 H11" 
-        stroke="#FF4566" 
-        strokeWidth="1.5" 
+        d="M12 63.5 V52 H18 V46 H24 V58 L27 34 L32 48 H36 V42 H40 V54 H44 V63.5" 
+        stroke="#F43F5E" 
+        strokeWidth="2" 
         strokeLinejoin="round"
+        filter="url(#redGlow)"
       />
       
-      {/* Cityscape Right - Red */}
+      {/* Right Cityscape - Red */}
       <path 
-        d="M64.5 62.5 H69 V58 H71 V38.5 H74.5 V52 L76 38.5 H81 V62.5 H77.5 V59.5 H74.5 V62.5 L81 62.5 V48 H91 V58 L94 62.5 H64.5" 
-        stroke="#FF4566" 
-        strokeWidth="1.5" 
+        d="M62 63.5 H67 V53 H72 V42 H76 V56 L79 42 H84 V63.5 M84 63.5 H88 V54 H92 V63.5" 
+        stroke="#F43F5E" 
+        strokeWidth="2" 
         strokeLinejoin="round"
+        filter="url(#redGlow)"
       />
-      
-      {/* Baseline - Blue */}
-      <line x1="8" y1="62.5" x2="92" y2="62.5" stroke="#67C6FF" strokeWidth="1.5" />
-      
-      {/* Main Scan Arc - Blue */}
+
+      {/* Cyan Scanning Arc */}
       <path 
-        d="M18.5 62.5 Q50 21 81.5 62.5" 
-        stroke="#67C6FF" 
-        strokeWidth="2.5" 
+        d="M21 63.5 Q50 28 79 63.5" 
+        stroke="#22D3EE" 
+        strokeWidth="3.5" 
         strokeLinecap="round"
+        filter="url(#cyanGlow)"
       />
-      
-      {/* Arc Nodes - Blue */}
-      <circle cx="18.5" cy="62.5" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
-      <circle cx="81.5" cy="62.5" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
-      <circle cx="50" cy="38" r="2.5" fill="#67C6FF" stroke="#67C6FF" strokeWidth="1" />
-      
-      {/* Center Vertical Scanner - Blue */}
+
+      {/* Vertical Dashed Line */}
       <line 
-        x1="50" y1="38" x2="50" y2="62.5" 
-        stroke="#67C6FF" 
-        strokeWidth="1.5" 
-        strokeDasharray="2 3" 
+        x1="50" y1="63.5" x2="50" y2="45.5" 
+        stroke="#22D3EE" 
+        strokeWidth="2.5" 
+        strokeDasharray="3 3"
+        filter="url(#cyanGlow)"
       />
-      
-      {/* Outer Viewfinder Frame - Blue */}
-      <path d="M16 23 V16 A3 3 0 0 1 19 13 H24" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M76 13 H81 A3 3 0 0 1 84 16 V23" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M84 77 V84 A3 3 0 0 1 81 87 H76" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M24 87 H19 A3 3 0 0 1 16 84 V77" stroke="#67C6FF" strokeWidth="2.5" strokeLinecap="round" />
-      
-      {/* Mid Connectors - Blue */}
-      <line x1="41" y1="8" x2="59" y2="8" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
-      <line x1="7" y1="41" x2="7" y2="59" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
-      <line x1="93" y1="41" x2="93" y2="59" stroke="#67C6FF" strokeWidth="3" strokeLinecap="round" />
-      
-      {/* Outer rounded border */}
-      <rect x="6" y="6" width="88" height="88" rx="12" stroke="#67C6FF" strokeWidth="1.5" strokeOpacity="0.5" />
+
+      {/* Nodes (Dots) - Cyan */}
+      <circle cx="21" cy="63.5" r="2.5" fill="#22D3EE" filter="url(#cyanGlow)" />
+      <circle cx="79" cy="63.5" r="2.5" fill="#22D3EE" filter="url(#cyanGlow)" />
+      <circle cx="50" cy="45.5" r="2.5" fill="#22D3EE" filter="url(#cyanGlow)" />
     </svg>
   );
 };

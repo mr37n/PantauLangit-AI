@@ -3,7 +3,7 @@ import {
   Camera, Map as MapIcon, History, FileText, 
   AlertTriangle, CheckCircle2, Info, ChevronRight,
   Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
-  Download, RefreshCw, BarChart3, Settings, Moon, Sun, LogOut
+  Download, RefreshCw, BarChart3, Settings, Moon, Sun
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast, Toaster } from "react-hot-toast";
@@ -14,6 +14,7 @@ import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
 import { Logo } from "./components/Logo";
 import { saveAQIRecord, getHistory, testFirestoreConnection } from "./lib/firebase";
+import { saveLocalAQI, getLocalAQI, clearLocalAQI } from "./lib/storage";
 import { cn, getAQIColor, getAQITextColor, getAQIStatus } from "./lib/utils";
 import { HistoryRecord, AnalysisResult } from "./types";
 
@@ -35,6 +36,7 @@ export default function App() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [isFocusing, setIsFocusing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [realTimeHistory, setRealTimeHistory] = useState<HistoryRecord[]>([]);
@@ -65,15 +67,59 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Periodic Auto-Focus Trigger
+  useEffect(() => {
+    let focusInterval: ReturnType<typeof setInterval>;
+    
+    if (activeTab === "analysis" && isCapturing && streamRef.current) {
+      focusInterval = setInterval(async () => {
+        const track = streamRef.current?.getVideoTracks()[0];
+        if (track && 'applyConstraints' in track) {
+          try {
+            const capabilities = track.getCapabilities() as MediaTrackCapabilities & { focusMode?: string[] };
+            if (capabilities.focusMode) {
+              setIsFocusing(true);
+              await track.applyConstraints({
+                advanced: [{ focusMode: 'continuous' }]
+              } as unknown as MediaTrackConstraints);
+              setTimeout(() => setIsFocusing(false), 1500);
+            }
+          } catch (e) {
+            console.warn("Auto-focus application failed:", e);
+          }
+        }
+      }, 8000); 
+    }
+
+    return () => clearInterval(focusInterval);
+  }, [activeTab, isCapturing]);
+
   // Load History
   const loadHistory = useCallback(async () => {
     try {
-      const data = await getHistory();
-      if (data && data.length > 0) {
-        setHistory(data);
-      }
+      const firebaseData = await getHistory();
+      const localData = getLocalAQI();
+      
+      // Merge and deduplicate by ID, then sort by timestamp
+      const combined = [...firebaseData, ...localData].sort((a, b) => {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+        return timeB - timeA;
+      });
+
+      // Simple deduplication (prefer Firebase IDs over local if identical, though unlikely here)
+      const seen = new Set();
+      const unique = combined.filter(item => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+
+      setHistory(unique);
     } catch (err) {
       console.warn("Could not load initial history:", err);
+      // Fallback to just local if Firebase fails
+      setHistory(getLocalAQI());
     }
   }, []);
 
@@ -200,10 +246,26 @@ export default function App() {
     }
 
     try {
-      // Successively try different constraints
+      // Successively try different constraints with focus support
+      const autofocusConstraints = { focusMode: "continuous" } as unknown as MediaTrackConstraintSet;
       const constraints = [
-        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-        { video: { facingMode: "environment" } },
+        { 
+          video: { 
+            facingMode: { ideal: "environment" }, 
+            width: { ideal: 1920 }, 
+            height: { ideal: 1080 },
+            advanced: [autofocusConstraints]
+          } 
+        },
+        { 
+          video: { 
+            facingMode: { ideal: "environment" }, 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            advanced: [autofocusConstraints]
+          } 
+        },
+        { video: { facingMode: "environment", advanced: [autofocusConstraints] } },
         { video: true }
       ];
 
@@ -311,14 +373,22 @@ export default function App() {
       setAnalysis(data);
 
       if (data.estimatedAQI) {
-        await saveAQIRecord({
+        const recordData = {
           aqi: data.estimatedAQI,
           status: data.status,
           visibilityIndex: data.visibilityIndex,
           pm25: data.estimatedAQI * 0.8, // Approximation
           location: location || { lat: -6.2, lng: 106.8 },
-          address: "Jakarta Pusat"
-        });
+          address: "Jakarta Pusat",
+          timestamp: new Date()
+        };
+
+        // Save to Firebase
+        await saveAQIRecord(recordData);
+        
+        // Save to Local Storage (User request)
+        saveLocalAQI(recordData);
+
         loadHistory();
       }
     } catch (err) {
@@ -342,7 +412,7 @@ export default function App() {
       await new Promise((resolve) => (img.onload = resolve));
       const pdfHeight = (img.height * pdfWidth) / img.width;
       pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Cakrawala_AI_Report_${new Date().getTime()}.pdf`);
+      pdf.save(`PantauLangit_AI_Report_${new Date().getTime()}.pdf`);
     } catch (err) {
       console.error("PDF Export Error:", err);
       toast.error("Gagal mengekspor PDF. Silakan coba lagi.");
@@ -432,7 +502,7 @@ export default function App() {
         <div className="p-8">
           <div className="flex items-center gap-3">
             <Logo className={cn("w-8 h-8", theme === 'dark' ? "text-white" : "text-blue-600")} />
-            <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>Cakrawala AI</h1>
+            <h1 className={cn("text-xl font-black tracking-tight leading-none", theme === 'dark' ? "text-white" : "text-slate-900")}>PantauLangit AI</h1>
           </div>
         </div>
         
@@ -576,11 +646,34 @@ export default function App() {
                         <canvas ref={canvasRef} className="hidden" />
                         <div className="absolute inset-0 bg-gradient-to-t from-navy-950/90 via-transparent to-navy-950/40 pointer-events-none"></div>
                         
+                        {/* Vision Analysis - Focusing Indicator */}
+                        <AnimatePresence>
+                          {isFocusing && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 1.2 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.9 }}
+                              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none"
+                            >
+                              <div className="relative w-24 h-24">
+                                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-blue-500 rounded-tl-lg" />
+                                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-blue-500 rounded-tr-lg" />
+                                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-blue-500 rounded-bl-lg" />
+                                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-blue-500 rounded-br-lg" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+                                </div>
+                              </div>
+                              <p className="text-[10px] font-black text-blue-500 text-center mt-4 uppercase tracking-[0.3em] drop-shadow-lg">Neural Focus</p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
                         {/* Stop Scan Button */}
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40">
+                        <div className="absolute top-32 left-1/2 -translate-x-1/2 z-40">
                           <button 
                             onClick={stopCamera}
-                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 backdrop-blur-xl px-8 py-3 rounded-2xl font-black transition-all flex items-center gap-3 active:scale-95 group shadow-2xl"
+                            className="bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 backdrop-blur-xl px-8 py-3 rounded-2xl font-black transition-all flex items-center gap-3 active:scale-95 group shadow-2xl"
                           >
                             <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                             Hentikan Scan
@@ -655,16 +748,16 @@ export default function App() {
                         </div>
 
                         {/* Capture Controls */}
-                        <div className="absolute bottom-10 left-10 right-10 z-20 flex flex-col sm:flex-row justify-between items-end gap-6">
-                          <div className="space-y-2">
-                             <div className="flex items-center gap-2">
+                        <div className="absolute bottom-10 left-6 right-6 z-20 flex flex-col items-center sm:flex-row sm:justify-between sm:items-end gap-6">
+                          <div className="space-y-2 text-center sm:text-left">
+                             <div className="flex items-center justify-center sm:justify-start gap-2">
                                 <div className="h-0.5 w-8 bg-blue-500"></div>
                                 <p className="text-[10px] text-blue-400 uppercase tracking-[0.3em] font-black">Spatial Core</p>
                              </div>
                              <h2 className="text-3xl font-black text-white tracking-tighter">
                                {location ? "Jakarta Cluster" : "Grid Aquiring"}
                              </h2>
-                             <div className="flex items-center gap-2 text-slate-400">
+                             <div className="flex items-center justify-center sm:justify-start gap-2 text-slate-400">
                                 <Navigation className="w-3 h-3" />
                                 <span className="text-[10px] font-bold tracking-widest uppercase">Sector: {location?.lat.toFixed(2)}N / {location?.lng.toFixed(2)}E</span>
                              </div>
@@ -674,7 +767,7 @@ export default function App() {
                             {recordedVideoUrl ? (
                               <a 
                                 href={recordedVideoUrl} 
-                                download={`Cakrawala_Rec_${new Date().getTime()}.webm`}
+                                download={`PantauLangit_Rec_${new Date().getTime()}.webm`}
                                 className="glass hover:bg-emerald-500/10 text-emerald-400 px-6 h-16 rounded-3xl transition-all border-emerald-500/20 flex items-center gap-3 active:scale-95"
                               >
                                 <Download className="w-5 h-5" />
@@ -695,15 +788,6 @@ export default function App() {
                               </button>
                             )}
                             
-                            <button 
-                              onClick={() => {
-                                stopCamera();
-                                if (isRecording) stopRecording();
-                              }}
-                              className="glass hover:bg-red-500/10 text-red-400 p-5 rounded-3xl transition-all border-red-500/20 active:scale-95"
-                            >
-                              <LogOut className="w-6 h-6 rotate-180" />
-                            </button>
                             <button 
                               onClick={analyzeFrame}
                               disabled={isAnalyzing}
@@ -740,36 +824,87 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Analysis Result Narrative */}
+                  {/* Analysis Result Narrative & Pollutant Breakdown */}
                   <AnimatePresence>
                     {analysis && (
                       <motion.div 
                         initial={{ opacity: 0, y: 30 }} 
                         animate={{ opacity: 1, y: 0 }}
-                        className="glass-dark border border-white/5 p-8 rounded-[2rem] relative overflow-hidden"
+                        className="flex flex-col gap-6"
                       >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                        <div className="flex items-start gap-6">
-                           <div className="w-14 h-14 rounded-2xl glass flex items-center justify-center shrink-0">
-                              <Info className="w-7 h-7 text-blue-400" />
-                           </div>
-                           <div className="flex-1">
-                              <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-2">Neural Link Feed</h3>
-                              <p className="text-slate-300 text-lg leading-relaxed font-bold tracking-tight">
-                                "{analysis.description}"
-                              </p>
-                              <div className="flex gap-4 mt-6">
-                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Confidence</span>
-                                    <span className="text-sm font-black text-white">{analysis.confidence}%</span>
-                                 </div>
-                                 <div className="w-px h-8 bg-white/10"></div>
-                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Particulate</span>
-                                    <span className="text-sm font-black text-white">{analysis.dominantParticulate}</span>
-                                 </div>
+                        <div className="glass-dark border border-white/5 p-8 rounded-[2rem] relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                          <div className="flex items-start gap-6">
+                             <div className="w-14 h-14 rounded-2xl glass flex items-center justify-center shrink-0">
+                                <Info className="w-7 h-7 text-blue-400" />
+                             </div>
+                             <div className="flex-1">
+                                <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-2">Neural Link Feed</h3>
+                                <p className="text-slate-300 text-lg leading-relaxed font-bold tracking-tight">
+                                  "{analysis.description}"
+                                </p>
+                                <div className="flex gap-4 mt-6">
+                                   <div className="flex flex-col">
+                                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Confidence</span>
+                                      <span className="text-sm font-black text-white">{analysis.confidence}%</span>
+                                   </div>
+                                   <div className="w-px h-8 bg-white/10"></div>
+                                   <div className="flex flex-col">
+                                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Particulate</span>
+                                      <span className="text-sm font-black text-white">{analysis.dominantParticulate}</span>
+                                   </div>
+                                </div>
+                             </div>
+                          </div>
+                        </div>
+
+                        {/* Detailed Breakdown Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {analysis.pollutants && analysis.pollutants.map((p, idx) => (
+                            <motion.div 
+                              key={p.name}
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: idx * 0.1 }}
+                              className="glass-dark border border-white/5 p-5 rounded-3xl relative group overflow-hidden"
+                            >
+                              {/* Visual Cue Overlay */}
+                              <div className="absolute -right-2 -top-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <Cpu className="w-16 h-16" />
                               </div>
-                           </div>
+
+                              <div className="flex justify-between items-start mb-4">
+                                <div>
+                                  <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{p.name}</h4>
+                                  <div className="flex items-baseline gap-1 mt-1">
+                                    <span className="text-xl font-black text-white">{p.value}</span>
+                                    <span className="text-[8px] font-bold text-slate-500">{p.unit}</span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                  <span className="text-[8px] font-black text-slate-500 uppercase">Confidence</span>
+                                  <span className="text-[10px] font-black text-emerald-400">{p.confidence}%</span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                {p.visualCues && p.visualCues.map((cue, cIdx) => (
+                                  <div key={cIdx} className="flex items-center gap-2">
+                                    <div className="w-1 h-1 rounded-full bg-blue-500/50" />
+                                    <span className="text-[9px] font-medium text-slate-400 italic">"{cue}"</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${p.confidence}%` }}
+                                  className="h-full bg-blue-500/40"
+                                />
+                              </div>
+                            </motion.div>
+                          ))}
                         </div>
                       </motion.div>
                     )}
@@ -1204,7 +1339,7 @@ export default function App() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                   <div>
                     <h2 className={cn("text-4xl font-black tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>System Configuration</h2>
-                    <p className={cn("text-sm mt-2 font-medium transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Atur preferensi visual dan manajemen data sistem Cakrawala AI.</p>
+                    <p className={cn("text-sm mt-2 font-medium transition-colors", theme === 'dark' ? "text-slate-500" : "text-slate-400")}>Atur preferensi visual dan manajemen data sistem PantauLangit AI.</p>
                   </div>
                 </div>
 
@@ -1317,7 +1452,8 @@ export default function App() {
                       <div className="pt-4 border-t border-white/5">
                         <button 
                           onClick={() => {
-                            if (confirm("Are you sure you want to delete all historical AQI records? This action cannot be undone.")) {
+                            if (confirm("Are you sure you want to delete all historical AQI records (including local data)? This action cannot be undone.")) {
+                              clearLocalAQI();
                               setHistory([]);
                               toast.success("Historical data has been cleared.");
                             }

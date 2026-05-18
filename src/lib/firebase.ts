@@ -56,7 +56,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export const saveAQIRecord = async (record: {
+export const saveAQIRecord = async (record: Partial<HistoryRecord> & {
   aqi: number;
   status: string;
   visibilityIndex: number;
@@ -66,8 +66,10 @@ export const saveAQIRecord = async (record: {
 }) => {
   const path = 'air_quality_history';
   try {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { timestamp, id, ...rest } = record;
     await addDoc(collection(db, path), {
-      ...record,
+      ...rest,
       timestamp: serverTimestamp(),
     });
   } catch (error) {

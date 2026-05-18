@@ -67,9 +67,15 @@ app.post("/api/analyze-frame", async (req, res) => {
       - visibilityIndex: (0.0 to 1.0, where 1.0 is crystal clear)
       - estimatedAQI: (numerical estimate, 0-500+)
       - dominantParticulate: (e.g., "PM2.5", "PM10", "NO2")
-      - confidence: (percentage)
-      - description: (brief text analysis of what you see in the frame related to air quality. Mention how weather conditions like humidity, wind, or UV Index (${weatherData?.uvIndex || 'N/A'}) might be affecting the observed air quality or ground-level ozone formation if applicable)
-      - status: (e.g., "Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous")
+      - confidence: (overall percentage)
+      - description: (brief text analysis of what you see in the frame related to air quality)
+      - status: (e.g., "Good", "Moderate", "Unhealthy", "Hazardous")
+      - pollutants: An array of objects for PM2.5, PM10, and Ozone (O3) with:
+          - name: (e.g., "PM2.5")
+          - value: (numerical estimate)
+          - unit: (e.g., "µg/m³" or "ppb")
+          - confidence: (percentage for this specific pollutant)
+          - visualCues: (array of strings, e.g., ["Grayish haze", "Blurred distant buildings"])
       
       Return ONLY valid JSON.
     `;
@@ -100,7 +106,7 @@ app.get("/api/local-pollution", async (_req, res) => {
   // In a real app, we'd fetch from WAQI or IQAir
   // For this project, we'll generate realistic random data based on GPS if we don't have a key
   res.json({
-    station: "Cakrawala Monitor - Sudirman",
+    station: "PantauLangit Monitor - Jakarta",
     ispu: Math.floor(Math.random() * 50) + 100, // Simulated ISPU
     pm25: Math.floor(Math.random() * 40) + 60,
     pm10: Math.floor(Math.random() * 30) + 40,

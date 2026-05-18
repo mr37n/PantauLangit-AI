@@ -20,6 +20,13 @@ export interface AnalysisResult {
   confidence: number;
   description: string;
   status: string;
+  pollutants: {
+    name: string;
+    value: number;
+    unit: string;
+    confidence: number;
+    visualCues: string[];
+  }[];
 }
 
 export interface LocalPollution {
