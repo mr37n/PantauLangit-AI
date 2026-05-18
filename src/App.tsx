@@ -1300,7 +1300,7 @@ export default function App() {
                   historyData={history}
                 />
                 
-                {/* Map Overlay Stats */}
+                {/* Map Overlay Stats & Weather Widget */}
                 <div className="absolute top-10 right-10 z-10 w-72 space-y-4">
                   <div className="glass-dark border border-white/10 p-6 rounded-[2rem] shadow-2xl">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Pollution Legend</h4>
@@ -1318,6 +1318,53 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Floating AI Weather Widget */}
+                  {analysis?.weather && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      className="glass-dark border border-emerald-500/20 p-6 rounded-[2rem] shadow-3xl relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 blur-[40px] rounded-full"></div>
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                             <Cloud className="w-4 h-4" />
+                          </div>
+                          <div>
+                             <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Weather Matrix</h4>
+                             <p className="text-[10px] font-bold text-white">{analysis.weather.condition}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2 py-3 border-y border-white/5">
+                           <div className="flex flex-col items-center">
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">TEMP</span>
+                              <span className="text-xs font-black text-white">{analysis.weather.temperature}°</span>
+                           </div>
+                           <div className="flex flex-col items-center">
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">WIND</span>
+                              <span className="text-xs font-black text-white">{analysis.weather.windSpeed}k</span>
+                           </div>
+                           <div className="flex flex-col items-center">
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">HUM</span>
+                              <span className="text-xs font-black text-white">{analysis.weather.humidity}%</span>
+                           </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 pt-1">
+                          <div className="flex items-center gap-2">
+                             <Wind className="w-3 h-3 text-emerald-400" />
+                             <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Pollution Dispersion</span>
+                          </div>
+                          <p className="text-[10px] font-medium text-slate-300 leading-tight italic">
+                             "{analysis.weather.effectOnPollution}"
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="absolute bottom-10 left-10 z-10">

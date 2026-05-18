@@ -20,6 +20,13 @@ export interface AnalysisResult {
   confidence: number;
   description: string;
   status: string;
+  weather?: {
+    temperature: number;
+    windSpeed: number;
+    humidity: number;
+    condition: string;
+    effectOnPollution: string;
+  };
   pollutants: {
     name: string;
     value: number;

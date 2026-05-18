@@ -57,27 +57,35 @@ app.post("/api/analyze-frame", async (req, res) => {
     }
 
     const prompt = `
-      Analyze this image taken from a mobile camera for air quality assessment.
-      Look at visibility, haze, smog, and clarity of the horizon or distant objects.
+      Anda adalah AI dari PantauLangit AI, sistem mutakhir untuk pemantauan kualitas udara.
+      Tugas Anda adalah menganalisis foto yang diambil dari kamera ponsel ini untuk penilaian kualitas udara dan kondisi lingkungan.
       
-      Current physical location context: ${JSON.stringify(location)}
-      Current real-time weather context: ${weatherData ? JSON.stringify(weatherData) : "Unavailable (use visual cues)"}
+      Lihat pada visibilitas, kabut asap (smog), kekaburan horizon, dan kejernihan objek jauh.
       
-      Provide an analysis in JSON format with:
-      - visibilityIndex: (0.0 to 1.0, where 1.0 is crystal clear)
-      - estimatedAQI: (numerical estimate, 0-500+)
-      - dominantParticulate: (e.g., "PM2.5", "PM10", "NO2")
-      - confidence: (overall percentage)
-      - description: (brief text analysis of what you see in the frame related to air quality)
-      - status: (e.g., "Good", "Moderate", "Unhealthy", "Hazardous")
-      - pollutants: An array of objects for PM2.5, PM10, and Ozone (O3) with:
-          - name: (e.g., "PM2.5")
-          - value: (numerical estimate)
-          - unit: (e.g., "µg/m³" or "ppb")
-          - confidence: (percentage for this specific pollutant)
-          - visualCues: (array of strings, e.g., ["Grayish haze", "Blurred distant buildings"])
+      Konteks lokasi fisik: ${JSON.stringify(location)}
+      Konteks cuaca real-time (jika tersedia): ${weatherData ? JSON.stringify(weatherData) : "Tidak tersedia (gunakan petunjuk visual dari gambar)"}
       
-      Return ONLY valid JSON.
+      Berikan analisis dalam format JSON dengan struktur berikut:
+      - visibilityIndex: (0.0 hingga 1.0, di mana 1.0 sangat jernih)
+      - estimatedAQI: (estimasi angka AQI, 0-500+)
+      - dominantParticulate: (misal: "PM2.5", "PM10", "NO2")
+      - confidence: (persentase keyakinan keseluruhan)
+      - description: (analisis teks singkat tentang apa yang Anda lihat di frame terkait kualitas udara)
+      - status: (misal: "Baik", "Sedang", "Tidak Sehat", "Berbahaya")
+      - weather: Objek yang berisi estimasi cuaca saat ini dari petunjuk visual:
+          - temperature: (angka estimasi suhu dalam °C)
+          - windSpeed: (angka estimasi kecepatan angin dalam km/jam)
+          - humidity: (angka estimasi kelembapan dalam %)
+          - condition: (Status cuaca: "Cerah", "Berawan", "Hujan", atau "Berkabut")
+          - effectOnPollution: (1 kalimat analisis dalam Bahasa Indonesia tentang bagaimana kondisi angin dan suhu saat itu memengaruhi kepekatan atau pergerakan polusi udara setempat)
+      - pollutants: Array objek untuk PM2.5, PM10, dan Ozone (O3) dengan:
+          - name: (misal: "PM2.5")
+          - value: (estimasi angka)
+          - unit: (misal: "µg/m³" atau "ppb")
+          - confidence: (persentase keyakinan untuk polutan spesifik ini)
+          - visualCues: (array string petunjuk visual, misal: ["Haze abu-abu", "Gedung jauh terlihat buram"])
+      
+      Kembalikan HANYA JSON yang valid dalam Bahasa Indonesia.
     `;
 
     const result = await model.generateContent([
