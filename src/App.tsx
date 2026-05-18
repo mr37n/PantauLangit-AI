@@ -468,7 +468,13 @@ export default function App() {
           location: location
         })
       });
+      
       const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || `Server responded with status ${res.status}`);
+      }
+      
       setAnalysis(data);
 
       if (data.estimatedAQI) {

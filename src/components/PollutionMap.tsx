@@ -139,7 +139,7 @@ export const PollutionMap: React.FC<{
         <Map
           defaultCenter={center}
           defaultZoom={11}
-          mapId="90f8735696b42b87"//
+          mapId={mapId || "90f8735696b42b87"}
           disableDefaultUI={true}
           gestureHandling="greedy"
           styles={DARK_MAP_STYLES}

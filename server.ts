@@ -12,14 +12,22 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 
 // Initializing Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const getGenAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not defined in environment variables");
+  }
+  return new GoogleGenerativeAI(apiKey);
+};
 
 // API Route for Vision-based Air Quality Analysis
 app.post("/api/analyze-frame", async (req, res) => {
   try {
     const { image, location } = req.body;
     if (!image) return res.status(400).json({ error: "Missing image data" });
+
+    const genAI = getGenAI();
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let weatherData = null;
     if (location && location.lat && location.lng) {
@@ -117,13 +125,29 @@ app.post("/api/analyze-frame", async (req, res) => {
     ]);
 
     const responseText = result.response.text();
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { error: "Failed to parse analysis" };
+    console.log("Gemini Raw Response:", responseText);
 
-    res.json(analysis);
-  } catch (error) {
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("Failed to find JSON in Gemini response:", responseText);
+      return res.status(500).json({ error: "Failed to parse analysis: No JSON found" });
+    }
+
+    try {
+      const analysis = JSON.parse(jsonMatch[0]);
+      res.json(analysis);
+    } catch (parseError) {
+      console.error("JSON Parse Error:", parseError, "Raw JSON candidate:", jsonMatch[0]);
+      res.status(500).json({ error: "Failed to parse analysis result" });
+    }
+  } catch (error: unknown) {
     console.error("Frame analysis error:", error);
-    res.status(500).json({ error: "Internal server error during analysis" });
+    const errorMessage = error instanceof Error ? error.message : "Internal server error during analysis";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    res.status(500).json({ 
+      error: errorMessage,
+      details: errorStack
+    });
   }
 });
 
