@@ -144,6 +144,7 @@ export const PollutionMap: React.FC<{
           gestureHandling="greedy"
           styles={DARK_MAP_STYLES}
           className="w-full h-full"
+          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
           onCenterChanged={(ev) => {
             if (onLocationChange && ev.detail.center) {
               onLocationChange(ev.detail.center);

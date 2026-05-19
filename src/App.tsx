@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Camera, Map as MapIcon, History, FileText, Clock, 
-  AlertTriangle, CheckCircle2, Info, ChevronRight, Maximize2,
+  AlertTriangle, CheckCircle2, Info, Maximize2,
   Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
   Download, RefreshCw, BarChart3, Settings, Moon, Sun
 } from "lucide-react";
@@ -25,9 +25,12 @@ import { WeatherForecast } from "./components/WeatherForecast";
 // Remove local types as they are now in types.ts
 
 // Maps Configuration
-const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const API_KEY = 
+  process.env.GOOGLE_MAPS_PLATFORM_KEY || 
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 
+  "";
 const MAPS_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
-const hasValidMapsKey = Boolean(MAPS_API_KEY) && MAPS_API_KEY !== "MY_GOOGLE_MAPS_KEY";
+const hasValidMapsKey = Boolean(API_KEY) && API_KEY !== "MY_GOOGLE_MAPS_KEY" && API_KEY !== "";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"analysis" | "history" | "map" | "settings">("analysis");
@@ -179,7 +182,7 @@ export default function App() {
     try {
       // Try Google Maps Geocoding if key is valid
       if (hasValidMapsKey) {
-        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${MAPS_API_KEY}`);
+        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${API_KEY}`);
         const data = await res.json();
         if (data.results && data.results[0]) {
           // Extract a shorter name (e.g., city or neighborhood)
@@ -355,7 +358,7 @@ export default function App() {
   useEffect(() => {
     (window as Window & { gm_authFailure?: () => void }).gm_authFailure = () => {
       setMapError(true);
-      toast.error("Google Maps API Error: API tidak diaktifkan");
+      toast.error("Google Maps API Auth Error (Check project status)");
     };
     return () => {
       delete (window as Window & { gm_authFailure?: () => void }).gm_authFailure;
@@ -644,66 +647,73 @@ export default function App() {
 
   if ((!hasValidMapsKey || mapError) && activeTab === "map") {
     return (
-      <div className="flex h-screen w-full bg-slate-950 font-sans text-slate-200 overflow-hidden">
-        <div className="m-auto text-center max-w-lg p-10 bg-navy-900 rounded-[3rem] border border-white/5 shadow-2xl flex flex-col items-center">
-          <div className="w-20 h-20 bg-blue-500/10 rounded-[2rem] flex items-center justify-center mb-6 border border-blue-500/20">
-            <MapIcon className="w-10 h-10 text-blue-400" />
-          </div>
-          <h2 className="text-2xl font-black mb-4 tracking-tight">Konfigurasi Maps Diperlukan</h2>
+      <div className="flex items-center justify-center min-h-screen bg-[#02040a] text-slate-300 font-sans p-6 w-full">
+        <div className="max-w-xl w-full glass-dark border border-white/10 p-10 rounded-[3rem] text-center shadow-2xl relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-600/10 rounded-full blur-3xl"></div>
           
-          <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl mb-8 w-full">
-            <p className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2 justify-center">
-              <AlertTriangle className="w-4 h-4" />
-              {mapError ? "Problem Terdeteksi: ApiNotActivatedMapError" : "Menunggu API Key"}
-            </p>
-            <p className="text-[13px] text-slate-400 leading-relaxed">
-              {mapError 
-                ? "API Key Anda sudah terpasang, namun layanan 'Maps JavaScript API' belum diaktifkan pada project Google Cloud Anda."
-                : "Anda perlu memasukkan VITE_GOOGLE_MAPS_API_KEY di menu Secrets untuk melihat peta polusi."}
-            </p>
-          </div>
+          <div className="relative z-10">
+            <div className="w-20 h-20 bg-blue-600/20 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-blue-500/30">
+              <MapIcon className="w-10 h-10 text-blue-400" />
+            </div>
+            
+            <h2 className="text-3xl font-black text-white mb-6 tracking-tight">Google Maps API Setup Required</h2>
+            
+            <div className="bg-red-500/10 border border-red-500/20 p-5 rounded-2xl mb-10 w-full text-left">
+              <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {mapError ? "Problem: DeletedApiProjectMapError / ApiNotActivated" : "Status: Waiting for Valid API Key"}
+              </p>
+              <p className="text-[13px] text-slate-300 leading-relaxed font-medium">
+                {mapError 
+                  ? "The project associated with your API key might have been deleted, or the 'Maps JavaScript API' is not enabled."
+                   : "A valid GOOGLE_MAPS_PLATFORM_KEY is required to initialize the global pollution vector layers."}
+              </p>
+            </div>
 
-          <div className="w-full space-y-4 text-left">
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">Langkah Perbaikan</h4>
-            <div className="space-y-2">
-              <a 
-                href="https://console.cloud.google.com/google/maps-apis/api/maps-backend.googleapis.com/overview" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-white/5 hover:border-blue-500/50 transition-all group"
-              >
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white group-hover:text-blue-400 px-2">1. Aktifkan API</span>
-                  <span className="text-[10px] text-slate-500 px-2">Klik untuk membuka Google Cloud Console</span>
+            <div className="text-left space-y-6 mb-10 text-[13px]">
+              <div className="flex gap-4">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold">1</div>
+                <div>
+                  <p className="font-bold text-white mb-1">Get an API Key</p>
+                  <p className="opacity-70 leading-relaxed">
+                    Obtain a key from the <a href="https://console.cloud.google.com/google/maps-apis/start?utm_campaign=gmp-code-assist-ais" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Google Cloud Console</a>. Ensure billing is active and the API is enabled.
+                  </p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-blue-400 transition-transform group-hover:translate-x-1" />
-              </a>
-              
-              <div className="p-4 bg-slate-950 rounded-2xl border border-white/5 flex flex-col gap-2">
-                <span className="text-sm font-bold text-white px-2">2. Tekan Tombol "ENABLE"</span>
-                <span className="text-[10px] text-slate-500 px-2 leading-relaxed">Pada halaman console, pastikan tombol biru bertuliskan <b>"ENABLE"</b> atau <b>"AKTIFKAN"</b> sudah ditekan.</span>
               </div>
-
-              <div className="p-4 bg-slate-950 rounded-2xl border border-white/5 flex flex-col gap-2">
-                <span className="text-sm font-bold text-white px-2">3. Refresh Halaman</span>
-                <span className="text-[10px] text-slate-500 px-2 leading-relaxed">Tunggu sekitar 1 menit agar perubahan di server Google tersinkronisasi, lalu muat ulang aplikasi ini.</span>
+              
+              <div className="flex gap-4">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold">2</div>
+                <div>
+                  <p className="font-bold text-white mb-1">Add to AI Studio Secrets</p>
+                  <ul className="space-y-2 opacity-70 list-disc ml-4 leading-relaxed">
+                    <li>Open <strong>Settings</strong> (⚙️ gear icon, top-right corner)</li>
+                    <li>Select <strong>Secrets</strong></li>
+                    <li>Add <code>GOOGLE_MAPS_PLATFORM_KEY</code> as the name</li>
+                    <li>Paste your key and press <strong>Enter</strong></li>
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex gap-4 mt-10 w-full">
-            <button 
-              onClick={() => setActiveTab("analysis")} 
-              className="flex-1 px-8 py-4 bg-white/5 hover:bg-white/10 rounded-2xl font-bold text-sm transition-all border border-white/10"
-            >
-              Kembali
-            </button>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="flex-1 px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-sm transition-all shadow-xl shadow-blue-900/40"
-            >
-              Check Lagi
-            </button>
+            
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setActiveTab("analysis")}
+                className="flex-1 px-6 py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] tracking-widest uppercase hover:bg-white/10 transition-all font-sans"
+              >
+                Back to Analysis
+              </button>
+              <button 
+                onClick={() => window.location.reload()}
+                className="flex-1 px-6 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all shadow-xl shadow-blue-900/40 font-sans"
+              >
+                Retry Connection
+              </button>
+            </div>
+            <p className="text-[10px] uppercase tracking-widest opacity-30 mt-6 font-black">
+              The app rebuilds automatically after adding the secret
+            </p>
           </div>
         </div>
       </div>
@@ -1667,7 +1677,7 @@ export default function App() {
                 <div className="absolute inset-0 bg-navy-950/20 backdrop-blur-sm z-0"></div>
                 
                 <PollutionMap 
-                  apiKey={MAPS_API_KEY} 
+                  apiKey={API_KEY} 
                   mapId={MAPS_MAP_ID}
                   userLocation={deviceLocation} 
                   targetLocation={location}
