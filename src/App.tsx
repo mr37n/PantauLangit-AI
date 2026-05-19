@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  Camera, Map as MapIcon, History, FileText, 
+  Camera, Map as MapIcon, History, FileText, Clock, 
   AlertTriangle, CheckCircle2, Info, ChevronRight, Maximize2,
   Navigation, Wind, Droplets, Thermometer, Cloud, X, Sliders, Cpu,
   Download, RefreshCw, BarChart3, Settings, Moon, Sun
@@ -52,7 +52,11 @@ export default function App() {
     wind: number;
     uv: number;
     condition: string;
+    forecast?: { day: string; temp: number; icon: number; condition: string }[];
+    history7d?: { date: string; temp: number; condition: string }[];
+    hourlyToday?: { time: string; temp: number; condition: string }[];
   } | null>(null);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [showWeatherOverlay, setShowWeatherOverlay] = useState(true);
   const [calibration, setCalibration] = useState<{
     pm25Offset: number;
@@ -202,27 +206,127 @@ export default function App() {
     }
   }, []);
 
-  const fetchWeatherData = useCallback(async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index`);
-      const data = await res.json();
-      if (data.current) {
-        const descriptions: Record<number, string> = {
-          0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-          45: "Fog", 48: "Rime Fog", 51: "Drizzle", 61: "Rain", 95: "Thunderstorm"
-        };
-        setWeatherData({
-          temp: data.current.temperature_2m,
-          humidity: data.current.relative_humidity_2m,
-          wind: data.current.wind_speed_10m,
-          uv: data.current.uv_index,
-          condition: descriptions[data.current.weather_code as number] || "Clear"
+  const fetchWeatherData = useCallback(async (lat: number, lng: number, retries = 2) => {
+    setIsWeatherLoading(true);
+    for (let i = 0; i <= retries; i++) {
+      try {
+        // Fetch Current, Forecast (next 7 days), Past (last 7 days), and Hourly
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min&hourly=temperature_2m,weather_code&past_days=7&timezone=auto`, {
+          signal: AbortSignal.timeout(10000) // 10s timeout
         });
+        
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
+        const data = await res.json();
+        
+        if (data.current) {
+          const descriptions: Record<number, string> = {
+            0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+            45: "Fog", 48: "Rime Fog", 51: "Drizzle", 61: "Rain", 95: "Thunderstorm"
+          };
+          
+          // History: 7 days ending Today (indices 1 to 7 of past_days=7 data)
+          const historyData = data.daily.time.slice(1, 8).map((time: string, idx: number) => {
+            const actualIdx = idx + 1;
+            const dateObj = new Date(time);
+            const isToday = dateObj.toDateString() === new Date().toDateString();
+            
+            return {
+              date: isToday ? "Today" : dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+              temp: Math.round(data.daily.temperature_2m_max[actualIdx]),
+              condition: descriptions[data.daily.weather_code[actualIdx] as number] || "Clear"
+            };
+          });
+
+          // Forecast: today and after
+          const forecastData = data.daily.time.slice(7).map((time: string, idx: number) => {
+            const actualIdx = idx + 7;
+            return {
+              day: idx === 0 ? "Today" : idx === 1 ? "Tomorrow" : new Date(time).toLocaleDateString('id-ID', { weekday: 'short' }),
+              temp: Math.round(data.daily.temperature_2m_max[actualIdx]),
+              icon: data.daily.weather_code[actualIdx],
+              condition: descriptions[data.daily.weather_code[actualIdx] as number] || "Clear"
+            };
+          });
+
+          // Hourly: 12-hour segment (Day 06-18 or Night 18-06)
+          const now = new Date();
+          const currentHour = now.getHours();
+          const isDaySegment = currentHour >= 6 && currentHour < 18;
+          
+          const startOfSegment = new Date(now);
+          startOfSegment.setMinutes(0, 0, 0);
+          if (isDaySegment) {
+            startOfSegment.setHours(6);
+          } else {
+            if (currentHour < 6) {
+              startOfSegment.setDate(startOfSegment.getDate() - 1);
+            }
+            startOfSegment.setHours(18);
+          }
+
+          const startTimeStr = startOfSegment.toISOString().split(':').slice(0, 2).join(':'); 
+          const startIdx = data.hourly.time.findIndex((t: string) => t.startsWith(startTimeStr.substring(0, 13)));
+
+          const hourlyData = (startIdx !== -1 ? data.hourly.time.slice(startIdx, startIdx + 12) : []).map((time: string, idx: number) => {
+            const actualIdx = startIdx + idx;
+            return {
+              time: new Date(time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+              temp: Math.round(data.hourly.temperature_2m[actualIdx]),
+              condition: descriptions[data.hourly.weather_code[actualIdx] as number] || "Clear"
+            };
+          });
+
+          setWeatherData({
+            temp: data.current.temperature_2m,
+            humidity: data.current.relative_humidity_2m,
+            wind: data.current.wind_speed_10m,
+            uv: data.current.uv_index,
+            condition: descriptions[data.current.weather_code as number] || "Clear",
+            forecast: forecastData,
+            history7d: historyData,
+            hourlyToday: hourlyData
+          });
+          
+          setIsWeatherLoading(false);
+          return; // Success!
+        }
+      } catch (err) {
+        console.error(`Attempt ${i + 1} failed:`, err);
+        if (i === retries) {
+          toast.error("Gagal sinkronisasi data cuaca. Periksa koneksi internet.");
+        } else {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
       }
-    } catch (err) {
-      console.error("OpenMeteo fetch failed:", err);
     }
+    setIsWeatherLoading(false);
   }, []);
+
+  // Update weather when location changes
+  useEffect(() => {
+    if (location) {
+      const timer = setTimeout(() => {
+        fetchWeatherData(location.lat, location.lng);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [location, fetchWeatherData]);
+
+  // Default Location Fallback (Jakarta)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!location) {
+        const DEFAULT_LOCATION = { lat: -6.2088, lng: 106.8456 }; // Jakarta
+        setLocation(DEFAULT_LOCATION);
+        fetchWeatherData(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
+        fetchLocationName(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
+        toast("Gunakan lokasi default: Jakarta (GPS tidak aktif)", { icon: "ℹ️" });
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [location, fetchWeatherData, fetchLocationName]);
 
   // Update real-time history for graph (last 5 minutes)
   useEffect(() => {
@@ -1024,8 +1128,20 @@ export default function App() {
                         {/* Detailed Breakdown Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                           {/* Weather Forecast Card (New Component) */}
-                          {analysis.weather && (
-                            <WeatherForecast weather={analysis.weather} className="lg:col-span-1" />
+                          {weatherData && (
+                            <WeatherForecast 
+                              weather={{
+                                temperature: weatherData.temp.toString(),
+                                humidity: weatherData.humidity.toString(),
+                                windSpeed: weatherData.wind.toString(),
+                                condition: weatherData.condition
+                              }} 
+                              locationName={locationName}
+                              forecast={weatherData?.forecast}
+                              history7d={weatherData?.history7d}
+                              hourlyToday={weatherData?.hourlyToday}
+                              className="lg:col-span-1" 
+                            />
                           )}
 
                           <div className="md:col-span-2 lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1142,7 +1258,7 @@ export default function App() {
                           
                           <div className="flex-1">
                             <h2 className="text-xl font-black leading-tight tracking-tight">
-                              {analysis ? getAQIStatus(analysis.estimatedAQI).toUpperCase() : "READY TO SCAN"}
+                              {analysis ? getAQIStatus(analysis.estimatedAQI).toUpperCase() : "SCAN"}
                             </h2>
                             <p className="text-xs mt-2 opacity-70 leading-relaxed font-medium">
                               {analysis 
@@ -1260,10 +1376,10 @@ export default function App() {
                           <div className="w-8 h-8 rounded-xl bg-orange-500/20 flex items-center justify-center border border-orange-500/20">
                             <Thermometer className="w-4 h-4 text-orange-400" />
                           </div>
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Feels Like</span>
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Temperature</span>
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black">32</span>
+                          <span className="text-2xl font-black">{weatherData?.temp || "--"}</span>
                           <span className="text-sm font-bold text-slate-500">°C</span>
                         </div>
                       </div>
@@ -1275,7 +1391,7 @@ export default function App() {
                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Humidity</span>
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black">64</span>
+                          <span className="text-2xl font-black">{weatherData?.humidity || "--"}</span>
                           <span className="text-sm font-bold text-slate-500">%</span>
                         </div>
                       </div>
@@ -1349,6 +1465,80 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Weather Evolution & Today's Hourly Section */}
+                  {isWeatherLoading ? (
+                    <div className="mb-12 flex items-center gap-4 bg-white/5 p-8 rounded-[2rem] animate-pulse">
+                       <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+                       <div>
+                          <p className="text-xs font-black text-white uppercase tracking-widest">Atmo-Data Synchronizing</p>
+                          <p className="text-[10px] font-bold text-slate-500">Connecting to Meteorological Satellites...</p>
+                       </div>
+                    </div>
+                  ) : (weatherData?.history7d || weatherData?.hourlyToday) ? (
+                    <div className="space-y-12 mb-12">
+                      {/* 7-Day History */}
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <div className="flex items-center gap-2 mb-4">
+                          <History className="w-4 h-4 text-emerald-400" />
+                          <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Atmospheric Evolution (7D)</h3>
+                        </div>
+                        <div className="flex flex-wrap lg:flex-nowrap gap-3 w-full">
+                          {weatherData?.history7d?.map((h, i) => (
+                            <div key={i} className="flex-1 min-w-[90px] lg:min-w-0 glass-dark border border-white/5 p-3 rounded-2xl flex flex-col items-center text-center transition-all hover:border-emerald-500/30">
+                              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">{h.date}</span>
+                              <div className="p-1.5 rounded-xl bg-white/5 mb-2">
+                                <Thermometer className="w-4 h-4 text-orange-400" />
+                              </div>
+                              <span className="text-xl font-black text-white">{h.temp}°</span>
+                              <span className="text-[8px] font-bold text-slate-400 mt-1 uppercase truncate w-full leading-tight">{h.condition}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                      
+                      {/* Today's Hourly Cycle (Compact Horizontal - Full Width) */}
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-blue-400" />
+                            <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">
+                              {new Date().getHours() >= 6 && new Date().getHours() < 18 ? "Today's Day Cycle" : "Today's Night Cycle"}
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="glass-dark border border-white/5 p-3 rounded-[1.5rem] flex flex-wrap lg:flex-nowrap gap-3 w-full">
+                          {weatherData?.hourlyToday?.map((h, i) => (
+                            <div key={i} className="flex-1 min-w-[75px] lg:min-w-0 flex flex-col items-center bg-white/5 p-3 rounded-xl border border-white/5 transition-all hover:bg-white/10">
+                              <span className="text-[8px] font-bold text-slate-500 mb-1">{h.time}</span>
+                              <div className="p-1.5 rounded-xl bg-blue-500/10 mb-2">
+                                <Cloud className="w-4 h-4 text-blue-400" />
+                              </div>
+                              <span className="text-sm font-black text-white">{h.temp}°</span>
+                              <span className="text-[7px] font-black uppercase text-blue-400/70 mt-1 tracking-tighter truncate w-full text-center leading-tight">{h.condition}</span>
+                            </div>
+                          )) || (
+                            <div className="w-full h-12 flex items-center justify-center opacity-30">
+                              <p className="text-[8px] font-black uppercase tracking-widest">Sector segments empty</p>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    </div>
+                  ) : location ? (
+                    <div className="mb-12 bg-rose-500/10 border border-rose-500/20 p-6 rounded-[2rem] flex flex-col items-center justify-center text-center">
+                       <Cloud className="w-10 h-10 text-rose-400 mb-3 opacity-50" />
+                       <p className="text-xs font-black text-rose-400 uppercase tracking-widest">Meteorological Data Unavailable</p>
+                       <p className="text-[10px] text-slate-400 mt-1 max-w-xs">Failed to pulse atmospheric sensors for the selected sector. This could be due to connectivity or satellite alignment.</p>
+                       <button onClick={() => fetchWeatherData(location.lat, location.lng)} className="mt-6 text-[9px] font-black uppercase tracking-widest text-white bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 px-6 py-2.5 rounded-xl transition-all">Retry Pulse</button>
+                    </div>
+                  ) : null}
 
                   {/* Chart */}
                   <div className="h-[400px] w-full mb-12 relative">
